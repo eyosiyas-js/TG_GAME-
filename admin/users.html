@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Users</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+        button.danger { background: #ef4444; color: white; }
+        input[type="number"] { padding: 0.2rem; border-radius: 4px; border: 1px solid #334155; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html" class="active">Users</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="settings.html">Settings</a>
+    </div>
+
+    <div class="card">
+        <h2>Users Management</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Level</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-body">
+                <tr><td colspan="5">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadUsers() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/users');
+                const users = await res.json();
+                const tbody = document.getElementById('users-body');
+                tbody.innerHTML = '';
+                users.forEach(u => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${u.username}</td>
+                        <td>${u.level}</td>
+                        <td>
+                            <input type="number" id="bal-${u.id}" value="${u.wallet ? u.wallet.balance : 0}">
+                            <button onclick="updateBalance('${u.id}')">Save</button>
+                        </td>
+                        <td>${u.isBanned ? '<span style="color:#ef4444">Banned</span>' : '<span style="color:#22c55e">Active</span>'}</td>
+                        <td>
+                            <button class="${u.isBanned ? '' : 'danger'}" onclick="toggleBan('${u.id}', ${!u.isBanned})">
+                                ${u.isBanned ? 'Unban' : 'Ban'}
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function updateBalance(id) {
+            const val = document.getElementById(`bal-${id}`).value;
+            await fetch(`http://localhost:3005/admin/users/${id}/balance`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ balance: Number(val) })
+            });
+            loadUsers();
+        }
+
+        async function toggleBan(id, isBanned) {
+            await fetch(`http://localhost:3005/admin/users/${id}/ban`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isBanned })
+            });
+            loadUsers();
+        }
+
+        loadUsers();
+    </script>
+</body>
+</html>

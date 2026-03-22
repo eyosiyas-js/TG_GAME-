@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Settings</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; max-width: 600px; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: #94a3b8; font-weight: 500; }
+        .form-group input { width: 100%; padding: 0.75rem; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
+        .form-group .help-text { display: block; margin-top: 0.25rem; font-size: 0.8rem; color: #64748b; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: bold; }
+        button:hover { background: #0ea5e9; }
+        #toast { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: white; padding: 1rem; border-radius: 4px; display: none; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="settings.html" class="active">Settings</a>
+    </div>
+
+    <div class="card">
+        <h2>Game Management Settings</h2>
+        <div class="form-group">
+            <label>Disconnection Timeout (ms)</label>
+            <input type="number" id="setting-disconnect" placeholder="e.g. 60000">
+            <span class="help-text">Time a player has to reconnect before forfeiting (default 60000ms = 1 minute).</span>
+        </div>
+        <div class="form-group">
+            <label>Turn Timer (ms)</label>
+            <input type="number" id="setting-turn" placeholder="e.g. 15000">
+            <span class="help-text">Time allowed per turn in turn-based games (default 15000ms = 15 seconds).</span>
+        </div>
+        <div class="form-group">
+            <label>Bingo Quick Match Players</label>
+            <input type="number" id="setting-bingo" placeholder="e.g. 4">
+            <span class="help-text">Number of players required to start a quick match automatically (default 4).</span>
+        </div>
+        
+        <button onclick="saveSettings()">Save Changes</button>
+    </div>
+
+    <div id="toast">Settings updated successfully!</div>
+
+    <script>
+        async function loadSettings() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/settings');
+                const settings = await res.json();
+                document.getElementById('setting-disconnect').value = settings.DISCONNECT_TIMEOUT || 60000;
+                document.getElementById('setting-turn').value = settings.TURN_TIMER || 15000;
+                document.getElementById('setting-bingo').value = settings.BINGO_QUICK_PLAYERS || 4;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function saveSettings() {
+            const updates = [
+                { key: 'DISCONNECT_TIMEOUT', value: document.getElementById('setting-disconnect').value },
+                { key: 'TURN_TIMER', value: document.getElementById('setting-turn').value },
+                { key: 'BINGO_QUICK_PLAYERS', value: document.getElementById('setting-bingo').value },
+            ];
+
+            for(const item of updates) {
+                await fetch('http://localhost:3005/admin/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item)
+                });
+            }
+
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
+        loadSettings();
+    </script>
+</body>
+</html>

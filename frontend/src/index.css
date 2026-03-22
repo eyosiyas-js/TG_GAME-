@@ -1,0 +1,238 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 14%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 145 100% 45%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 265 100% 46%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 30% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 51 100% 50%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 30% 22%;
+    --input: 222 30% 22%;
+    --ring: 145 100% 45%;
+
+    --radius: 0.75rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(145, 100%, 45%), hsl(160, 100%, 40%));
+    --gradient-secondary: linear-gradient(135deg, hsl(265, 100%, 46%), hsl(280, 100%, 55%));
+    --gradient-gold: linear-gradient(135deg, hsl(51, 100%, 50%), hsl(40, 100%, 55%));
+    --gradient-card: linear-gradient(145deg, hsl(222, 47%, 16%), hsl(222, 47%, 12%));
+    --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+
+    --shadow-glow-primary: 0 0 20px hsl(145 100% 45% / 0.3);
+    --shadow-glow-secondary: 0 0 20px hsl(265 100% 46% / 0.3);
+    --shadow-glow-gold: 0 0 20px hsl(51 100% 50% / 0.3);
+    --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
+
+    --font-display: 'Montserrat', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 145 100% 45%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 222 30% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 30% 22%;
+    --sidebar-ring: 145 100% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--gradient-glass);
+    backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+  .glow-primary {
+    box-shadow: var(--shadow-glow-primary);
+  }
+  .glow-secondary {
+    box-shadow: var(--shadow-glow-secondary);
+  }
+  .glow-gold {
+    box-shadow: var(--shadow-glow-gold);
+  }
+  .text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .text-gradient-gold {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .card-game {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-game:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 32px rgba(0,0,0,0.5);
+  }
+  .card-game:active {
+    transform: translateY(0px) scale(0.98);
+  }
+
+  /* Interactive button press effect */
+  .btn-press {
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .btn-press:active {
+    transform: scale(0.95);
+  }
+
+  /* Dice face styling */
+  .dice-face {
+    background: var(--gradient-card);
+    border: 2px solid hsl(var(--border));
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    perspective: 1000px;
+  }
+  .dice-face.rolling {
+    animation: dice-tumble 0.15s ease-in-out infinite;
+  }
+  .dice-face.landed {
+    animation: dice-land 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Bingo cell effects */
+  .bingo-cell {
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .bingo-cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, hsl(var(--primary) / 0.3), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .bingo-cell.called::after {
+    opacity: 1;
+  }
+  .bingo-cell.line-complete {
+    animation: line-flash 0.6s ease-out;
+  }
+
+  /* Notification badge pulse */
+  .badge-pulse {
+    animation: badge-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Scrollbar hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Active turn glow */
+  .turn-active {
+    animation: turn-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Score pop */
+  .score-pop {
+    animation: score-bump 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+@layer utilities {
+  .rounded-inherit {
+    border-radius: inherit;
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ── Keyframes ── */
+@keyframes dice-tumble {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(8deg) scale(1.05); }
+  50% { transform: rotate(-5deg) scale(0.95); }
+  75% { transform: rotate(3deg) scale(1.02); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes dice-land {
+  0% { transform: scale(1.3) rotate(10deg); }
+  40% { transform: scale(0.9) rotate(-3deg); }
+  70% { transform: scale(1.05) rotate(1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes line-flash {
+  0% { box-shadow: 0 0 0 0 hsl(145 100% 45% / 0.8); }
+  50% { box-shadow: 0 0 20px 4px hsl(145 100% 45% / 0.6); }
+  100% { box-shadow: 0 0 8px 0 hsl(145 100% 45% / 0.2); }
+}
+
+@keyframes badge-ping {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+@keyframes turn-pulse {
+  0%, 100% { box-shadow: 0 0 8px hsl(145 100% 45% / 0.3); }
+  50% { box-shadow: 0 0 24px hsl(145 100% 45% / 0.6); }
+}
+
+@keyframes score-bump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

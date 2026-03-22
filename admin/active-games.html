@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Active Games</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        .live-indicator { display: inline-block; width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html" class="active">Active Games</a>
+        <a href="settings.html">Settings</a>
+    </div>
+
+    <div class="card">
+        <h2>Active Games <div class="live-indicator"></div></h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Match ID</th>
+                    <th>Game Type</th>
+                    <th>Match Type</th>
+                    <th>Stake</th>
+                    <th>Players</th>
+                    <th>Extras (Bingo State)</th>
+                </tr>
+            </thead>
+            <tbody id="games-body">
+                <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadGames() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/live-games');
+                const games = await res.json();
+                const tbody = document.getElementById('games-body');
+                tbody.innerHTML = '';
+                if(games.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No active games at the moment.</td></tr>';
+                }
+                games.forEach(g => {
+                    const tr = document.createElement('tr');
+                    const pNames = g.participants.map(p => p.user.username).join(', ');
+                    let extraHTML = '';
+                    if (g.gameType === 'BINGO') {
+                        extraHTML = `Paused: ${g.paused ? 'Yes' : 'No'}, Turn Index: ${g.turnIndex}, Called: ${g.calledCount}`;
+                    }
+                    tr.innerHTML = `
+                        <td>${g.id.substring(0,8)}</td>
+                        <td>${g.gameType}</td>
+                        <td>${g.matchType}</td>
+                        <td>${g.stake}</td>
+                        <td>${pNames}</td>
+                        <td><span style="font-size: 0.8em; color: #94a3b8;">${extraHTML}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        loadGames();
+        // Auto-refresh every 5 seconds
+        setInterval(loadGames, 5000);
+    </script>
+</body>
+</html>

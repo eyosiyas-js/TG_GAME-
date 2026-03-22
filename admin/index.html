@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Matches</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+        .details { font-size: 0.8em; color: #cbd5e1; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="index.html" class="active">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="settings.html">Settings</a>
+    </div>
+
+    <div class="card">
+        <h2>Historical Matches</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Game Type</th>
+                    <th>Match Type</th>
+                    <th>Stake</th>
+                    <th>Winner</th>
+                    <th>End Time</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody id="matches-body">
+                <tr><td colspan="7">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadMatches() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/matches');
+                const matches = await res.json();
+                const tbody = document.getElementById('matches-body');
+                tbody.innerHTML = '';
+                matches.forEach(m => {
+                    const tr = document.createElement('tr');
+                    const winner = m.participants.find(p => p.userId === m.winnerId);
+                    
+                    const pNames = m.participants.map(p => p.user.username).join(', ');
+                    const moveCount = (m.moves || []).length;
+                    
+                    tr.innerHTML = `
+                        <td>${m.id.substring(0,8)}</td>
+                        <td>${m.gameType}</td>
+                        <td>${m.matchType}</td>
+                        <td>${m.stake}</td>
+                        <td>${winner ? winner.user.username : 'None'}</td>
+                        <td>${m.endedAt ? new Date(m.endedAt).toLocaleString() : 'N/A'}</td>
+                        <td class="details">Players: ${pNames}<br>${moveCount} moves recorded</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        loadMatches();
+    </script>
+</body>
+</html>
