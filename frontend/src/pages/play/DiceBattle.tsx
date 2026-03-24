@@ -1,6 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, MessageCircle, Users, Dices, RotateCcw, Check, Timer } from "lucide-react";
+import { ArrowLeft, MessageCircle, Users, Dices, RotateCcw, Check, Timer, WifiOff } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import MatchLobby from "@/components/game/MatchLobby";
 import { ConfettiExplosion, PageTransition, AnimatedCounter, sounds, useScreenShake } from "@/components/game/AnimationEffects";
 import ChatSystem from "@/components/game/ChatSystem";
@@ -59,9 +61,13 @@ const DiceBattle = () => {
   const [playerDice, setPlayerDice] = useState<[number, number]>([0, 0]);
   const [rollCount, setRollCount] = useState(0);
   const [turnScore, setTurnScore] = useState(0);
+  const [myDone, setMyDone] = useState(false);
+  const [opponentScore, setOpponentScore] = useState(0);
+  const [opponentRolls, setOpponentRolls] = useState(0);
+  const [opponentDone, setOpponentDone] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
-  const [isMyTurn, setIsMyTurn] = useState(true);
   const [rolling, setRolling] = useState(false);
+  const [opponentRolling, setOpponentRolling] = useState(false);
   const [landed, setLanded] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -69,13 +75,18 @@ const DiceBattle = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profilePlayer, setProfilePlayer] = useState<string | null>(null);
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false);
+  const [disconnectCountdown, setDisconnectCountdown] = useState(0);
+  const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timer = useMatchTimer();
 
   const [currentMatch, setCurrentMatch] = useState<any>(null);
   const matchRef = useRef<any>(null);
+  const isRollingRef = useRef(false);
   const [opponentRoll, setOpponentRoll] = useState<[number, number] | null>(null);
 
   const socketRef = useRef<any>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     socketRef.current = getSocket();
@@ -85,6 +96,20 @@ const DiceBattle = () => {
       matchRef.current = match;
       setGameState("match-found");
       sounds.matchFound?.();
+
+      // Handle DICE rejoin state
+      if ((match.gameType === "DICE" || match.gameType === "dice") && match.diceState) {
+        const ds = match.diceState;
+        setTurnScore(ds.myScore);
+        setRollCount(ds.myRolls);
+        setMyDone(ds.myDone);
+        setOpponentScore(ds.opponentScore);
+        setOpponentRolls(ds.opponentRolls);
+        setOpponentDone(ds.opponentDone);
+        if (ds.myLastRoll && ds.myLastRoll[0]) setPlayerDice(ds.myLastRoll);
+        if (ds.opponentLastRoll && ds.opponentLastRoll[0]) setOpponentRoll(ds.opponentLastRoll);
+        setLanded(true);
+      }
     });
 
     socketRef.current.on("matchUpdate", (match: any) => {
@@ -92,18 +117,23 @@ const DiceBattle = () => {
       matchRef.current = match;
 
       if (match.status === "FINISHED") {
+        setOpponentDisconnected(false);
+        if (disconnectTimerRef.current) {
+          clearInterval(disconnectTimerRef.current);
+          disconnectTimerRef.current = null;
+        }
         setTurnDeadline(null);
         const userId = localStorage.getItem("userId");
-        const myMove = (match.moves || []).find((m: any) => m.userId === userId);
-        const opMove = (match.moves || []).find((m: any) => m.userId !== userId);
+        const myMoveString = match.yourMove || (match.moves || []).find((m: any) => m.userId === userId)?.move;
+        const opMoveString = match.opponentMove || (match.moves || []).find((m: any) => m.userId !== userId)?.move;
         
-        if (opMove) {
-          const rolls = opMove.move.replace("roll:", "").split(",").map(Number);
+        if (opMoveString) {
+          const rolls = opMoveString.replace("roll:", "").split(",").map(Number);
           setOpponentRoll([rolls[0] || 1, rolls[1] || 1]);
         }
 
-        if (myMove) {
-          const rolls = myMove.move.replace("roll:", "").split(",").map(Number);
+        if (myMoveString) {
+          const rolls = myMoveString.replace("roll:", "").split(",").map(Number);
           setPlayerDice([rolls[0] || 1, rolls[1] || 1]);
           setTurnScore((rolls[0] || 0) + (rolls[1] || 0));
         }
@@ -128,14 +158,124 @@ const DiceBattle = () => {
       setTurnDeadline(Date.now() + data.turnTimeMs);
     });
 
-    socketRef.current.on("opponentMoved", () => {
-      // Could show a "they rolled" status instead of waiting
+    socketRef.current.on("diceUpdate", (data: any) => {
+      if (isRollingRef.current && data.myLastRoll) {
+        // We are locally expecting an animation! 
+        // Delay applying the server truth until 1.2s of fake rolling completes.
+        isRollingRef.current = false;
+        
+        const flashInterval = setInterval(() => {
+          setPlayerDice([Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1]);
+        }, 80);
+
+        setTimeout(() => {
+          clearInterval(flashInterval);
+          setTurnScore(data.myScore);
+          setRollCount(data.myRolls);
+          setMyDone(data.myDone);
+          
+          setOpponentScore(data.opponentScore);
+          setOpponentRolls(data.opponentRolls);
+          setOpponentDone(data.opponentDone);
+
+          if (data.myLastRoll && data.myLastRoll[0]) setPlayerDice(data.myLastRoll);
+          if (data.opponentLastRoll && data.opponentLastRoll[0]) setOpponentRoll(data.opponentLastRoll);
+
+          setRolling(false);
+          setOpponentRolling(false);
+          setLanded(true);
+          sounds.select();
+        }, 1200);
+      } else {
+        // Instant update (either a keep, or an opponent's roll arrived)
+        setTurnScore(data.myScore);
+        setRollCount(data.myRolls);
+        setMyDone(data.myDone);
+        
+        setOpponentScore(data.opponentScore);
+        setOpponentRolls(data.opponentRolls);
+        setOpponentDone(data.opponentDone);
+
+        if (data.myLastRoll && data.myLastRoll[0]) {
+          setPlayerDice(data.myLastRoll);
+        }
+        if (data.opponentLastRoll && data.opponentLastRoll[0]) {
+          setOpponentRoll(data.opponentLastRoll);
+        }
+
+        setRolling(false);
+        setOpponentRolling(false);
+        setLanded(true);
+      }
+    });
+
+    socketRef.current.on("opponentRolling", () => {
+       setOpponentRolling(true);
+    });
+
+    socketRef.current.on("opponentDisconnected", (data: any) => {
+      setOpponentDisconnected(true);
+      const deadline = data.reconnectDeadline;
+      const updateCountdown = () => {
+        const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        setDisconnectCountdown(remaining);
+      };
+      updateCountdown();
+      disconnectTimerRef.current = setInterval(updateCountdown, 1000);
+    });
+
+    socketRef.current.on("opponentReconnected", () => {
+      setOpponentDisconnected(false);
+      if (disconnectTimerRef.current) {
+        clearInterval(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+    });
+
+    socketRef.current.on("opponentDisconnectResolved", () => {
+      setOpponentDisconnected(false);
+      if (disconnectTimerRef.current) {
+        clearInterval(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
     });
 
     return () => {
       socketRef.current?.disconnect();
+      if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    const token = localStorage.getItem("token");
+    if (!userId || !token) return;
+
+    queryClient.fetchQuery({ queryKey: ["active-match"], queryFn: () => api.get("/game/active-match", token) }).then((match) => {
+      if (match && match.gameType === "DICE") {
+        setCurrentMatch(match);
+        setGameState("playing");
+        setStake(match.stake);
+        
+        if (match.diceState) {
+          const ds = match.diceState;
+          setTurnScore(ds.myScore);
+          setRollCount(ds.myRolls);
+          setMyDone(ds.myDone);
+          setOpponentScore(ds.opponentScore);
+          setOpponentRolls(ds.opponentRolls);
+          setOpponentDone(ds.opponentDone);
+          if (ds.myLastRoll && ds.myLastRoll[0]) setPlayerDice(ds.myLastRoll);
+          if (ds.opponentLastRoll && ds.opponentLastRoll[0]) setOpponentRoll(ds.opponentLastRoll);
+          setLanded(true);
+        }
+
+        setTimeout(() => {
+           socketRef.current?.emit("reconnect", { matchId: match.id }); 
+        }, 500);
+      }
+    });
+  }, [queryClient]);
 
   const handleStartMatchmaking = () => {
     sounds.select();
@@ -158,27 +298,27 @@ const DiceBattle = () => {
     timer.start();
   }, [timer]);
 
-  const doRoll = useCallback(() => {
-    if (rolling) return;
+  const doRoll = useCallback((action: 'roll' | 'roll_again' | 'keep') => {
+    if (rolling || myDone) return;
+    
+    const mId = currentMatch?.id || currentMatch?.matchId;
+    if (!mId) return;
+
+    if (action === 'keep') {
+       socketRef.current?.emit("submitMove", { matchId: mId, move: "keep" });
+       return;
+    }
+
+    // We are now Server-Authoritative!
+    isRollingRef.current = true;
     setRolling(true);
     setLanded(false);
-    setIsMyTurn(false);
     sounds.roll();
-
-    const flashInterval = setInterval(() => {
-      setPlayerDice([Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1]);
-    }, 80);
-
-    setTimeout(() => {
-      clearInterval(flashInterval);
-      setRolling(false);
-      setLanded(true);
-      setRollCount(1);
-      sounds.select();
-      
-      socketRef.current?.emit("submitMove", { matchId: currentMatch.id, move: "roll" });
-    }, 1200);
-  }, [rolling, currentMatch]);
+    socketRef.current?.emit("startRolling", { matchId: mId });
+    // Emit instantly! The backend computes instantly. 
+    // The `diceUpdate` socket listener will catch it and run the animation.
+    socketRef.current?.emit("submitMove", { matchId: mId, move: action });
+  }, [rolling, myDone, currentMatch]);
 
   const [showExitDialog, setShowExitDialog] = useState(false);
 
@@ -191,8 +331,9 @@ const DiceBattle = () => {
   };
 
   const confirmExit = () => {
-    if (currentMatch?.id) {
-      socketRef.current?.emit("forfeitMatch", { matchId: currentMatch.id });
+    const mId = currentMatch?.id || currentMatch?.matchId;
+    if (mId) {
+      socketRef.current?.emit("forfeitMatch", { matchId: mId });
     }
     setShowExitDialog(false);
   };
@@ -201,12 +342,18 @@ const DiceBattle = () => {
     setPlayerDice([0, 0]);
     setRollCount(0);
     setTurnScore(0);
+    setMyDone(false);
+    setOpponentScore(0);
+    setOpponentRolls(0);
+    setOpponentDone(false);
+    setOpponentRoll(null);
     setRolling(false);
+    isRollingRef.current = false;
+    setOpponentRolling(false);
     setLanded(false);
     setWinner(null);
     setShowConfetti(false);
     setTurnDeadline(null);
-    setIsMyTurn(true);
     setShowExitDialog(false);
     timer.reset();
     setGameState("lobby");
@@ -267,9 +414,9 @@ const DiceBattle = () => {
 
   if (gameState === "result") {
     const userId = localStorage.getItem("userId");
-    const myMatchMove = currentMatch?.moves?.find((m: any) => m.userId === userId);
-    const opMatchMove = currentMatch?.moves?.find((m: any) => m.userId !== userId);
-    const opParticipant = currentMatch?.participants?.find((p: any) => p.userId !== userId);
+    const myMatchMove = currentMatch?.moves?.find((m: any) => m.userId === userId)?.move || currentMatch?.yourMove;
+    const opMatchMove = currentMatch?.moves?.find((m: any) => m.userId !== userId)?.move || currentMatch?.opponentMove;
+    const opponentName = currentMatch?.opponentName || "Opponent";
 
     const parseMove = (m: string) => {
       if (!m) return { sum: 0, text: "0+0" };
@@ -281,16 +428,16 @@ const DiceBattle = () => {
       return { sum: Number(val), text: `${val}+0` };
     };
 
-    const myRes = parseMove(myMatchMove?.move);
-    const opRes = parseMove(opMatchMove?.move);
+    const myRes = parseMove(myMatchMove);
+    const opRes = parseMove(opMatchMove);
 
     const allScores = [
       { name: "You", score: myRes.sum, rolls: myRes.text, isMe: true },
-      { name: opParticipant?.user?.username || "Opponent", score: opRes.sum, rolls: opRes.text, isMe: false }
+      { name: opponentName, score: opRes.sum, rolls: opRes.text, isMe: false }
     ].sort((a, b) => b.score - a.score);
 
     const isWinner = currentMatch?.winnerId === userId;
-    const isDraw = currentMatch?.winnerId === null && currentMatch?.status === "FINISHED";
+    const isDraw = currentMatch?.winnerId === null && currentMatch?.status === "FINISHED" && currentMatch?.reason !== "forfeit" && currentMatch?.reason !== "opponent_timeout" && currentMatch?.reason !== "timeout";
 
     return (
       <PageTransition>
@@ -310,7 +457,19 @@ const DiceBattle = () => {
               <motion.p className={`text-2xl font-display font-extrabold ${isWinner ? "text-primary" : isDraw ? "text-foreground" : "text-destructive"}`} animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
                 {isWinner ? "YOU WIN! 🎉" : isDraw ? "IT'S A DRAW! 🤝" : "YOU LOST! 💀"}
               </motion.p>
-              <p className="text-sm text-muted-foreground mt-1">
+              {currentMatch?.reason === 'opponent_timeout' && isWinner && (
+                <p className="text-sm font-bold text-primary mt-2">Opponent was unable to make a move.</p>
+              )}
+              {currentMatch?.reason === 'timeout' && !isWinner && (
+                <p className="text-sm font-bold text-destructive mt-2">You ran out of time!</p>
+              )}
+              {currentMatch?.reason === 'forfeit' && isWinner && (
+                <p className="text-sm font-bold text-primary mt-2">Opponent has left the match.</p>
+              )}
+              {currentMatch?.reason === 'forfeit' && !isWinner && (
+                <p className="text-sm font-bold text-destructive mt-2">You forfeited the match.</p>
+              )}
+              <p className="text-sm text-muted-foreground mt-3">
                 {isWinner ? `Won $${stake * 2}!` : isDraw ? "Stake refunded!" : `Lost $${stake}`}
               </p>
               <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
@@ -401,7 +560,35 @@ const DiceBattle = () => {
 
       <AnimatePresence>
         {gameState === "match-found" && (
-          <PlayerMatchTransition onComplete={handleMatchTransitionComplete} />
+          <PlayerMatchTransition 
+            onComplete={handleMatchTransitionComplete}
+            players={(currentMatch?.allPlayers || []).map((p: any) => ({
+              name: p.userId === localStorage.getItem("userId") ? "You" : (p.username || "Opponent"),
+              level: p.level || 1,
+              wins: p.wins || 0,
+              streak: p.streak || 0,
+              avatar: p.avatar,
+              userId: p.userId
+            }))}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {opponentDisconnected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center"
+          >
+            <WifiOff className="w-16 h-16 text-destructive mb-4 animate-pulse" />
+            <h2 className="text-2xl font-display font-bold mb-2">Opponent Disconnected</h2>
+            <p className="text-muted-foreground mb-6">Waiting for them to reconnect...</p>
+            <div className="text-4xl font-display font-black text-primary">
+              {disconnectCountdown}s
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -431,14 +618,30 @@ const DiceBattle = () => {
           </div>
         </motion.div>
 
+        {/* Opponent Info */}
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-between items-center bg-muted/50 rounded-xl p-3 mb-4">
+           <div className="flex flex-col">
+              <span className="text-xs text-muted-foreground font-display font-bold">Opponent</span>
+              <span className="text-sm font-display font-bold text-foreground">
+                {currentMatch?.opponentName || 'Player'} ({opponentRolling ? 'Rolling...' : opponentDone ? 'Finished' : 'Playing...'})
+              </span>
+           </div>
+           <div className="flex gap-2">
+              <div className="bg-background rounded-lg px-2 py-1 text-center">
+                 <span className="text-[10px] text-muted-foreground block font-bold uppercase">Rolls</span>
+                 <span className="text-xs font-bold text-foreground">{opponentRolls}/2</span>
+              </div>
+           </div>
+        </motion.div>
+
         {/* Roll info */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-3 mb-6">
           <div className="flex-1 card-game rounded-xl p-3 text-center">
-            <p className="text-xs text-muted-foreground font-display">Rolls</p>
-            <p className="text-xl font-display font-extrabold text-foreground">{rollCount}/1</p>
+            <p className="text-xs text-muted-foreground font-display">Your Rolls</p>
+            <p className="text-xl font-display font-extrabold text-foreground">{rollCount}/2</p>
           </div>
           <div className="flex-1 card-game rounded-xl p-3 text-center">
-            <p className="text-xs text-muted-foreground font-display">Score</p>
+            <p className="text-xs text-muted-foreground font-display">Your Score</p>
             <p className="text-xl font-display font-extrabold text-primary"><AnimatedCounter value={turnScore} /></p>
           </div>
         </motion.div>
@@ -453,7 +656,7 @@ const DiceBattle = () => {
           <AnimatePresence mode="wait">
             {playerDice[0] > 0 && !rolling && (
               <motion.p key="sum" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-muted-foreground font-display">
-                {playerDice[0]} + {playerDice[1]} = <motion.span className="text-foreground font-bold text-base" initial={{ scale: 1.5 }} animate={{ scale: 1 }}>{playerDice[0] + playerDice[1]}</motion.span>
+                {playerDice[0]} + {playerDice[1]} = <motion.span className="text-foreground font-bold text-base" initial={{ scale: 1.5 }} animate={{ scale: 1 }}>{turnScore}</motion.span>
               </motion.p>
             )}
           </AnimatePresence>
@@ -462,27 +665,38 @@ const DiceBattle = () => {
         {/* Actions */}
         <div className="pb-24 space-y-3">
           <AnimatePresence mode="wait">
-            {rollCount === 0 && !rolling && (
-              <motion.button key="first-roll" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} whileTap={{ scale: 0.95 }} onClick={doRoll} className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary flex items-center justify-center gap-2">
-                <motion.div animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 1, repeat: Infinity }}>
-                  <Dices className="w-5 h-5" />
-                </motion.div>
-                Roll Dice
-              </motion.button>
-            )}
-
-            {(rolling || (rollCount === 1 && gameState === "playing")) && (
-              <motion.div key="rolling" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full py-4 rounded-2xl bg-muted text-center">
-                <motion.p className="font-display font-bold text-muted-foreground" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 0.5, repeat: Infinity }}>
-                  {rolling ? "Rolling..." : "Waiting for opponent..."}
-                </motion.p>
+            {!myDone ? (
+              <motion.div key="action-buttons" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="flex gap-3">
+                {rollCount === 0 ? (
+                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => doRoll('roll')} disabled={rolling} className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary flex items-center justify-center gap-2">
+                    <motion.div animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 1, repeat: Infinity }}>
+                      <Dices className="w-5 h-5" />
+                    </motion.div>
+                    Roll Dice
+                  </motion.button>
+                ) : (
+                  <>
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => doRoll('keep')} disabled={rolling} className="flex-1 py-4 rounded-xl bg-muted text-foreground border border-border font-display font-bold flex items-center justify-center gap-2">
+                      <Check className="w-5 h-5 text-emerald-500" /> Keep '{turnScore}'
+                    </motion.button>
+                    {rollCount < 2 && (
+                       <motion.button whileTap={{ scale: 0.95 }} onClick={() => doRoll('roll_again')} disabled={rolling} className="flex-1 py-4 rounded-xl bg-primary text-primary-foreground font-display font-bold glow-primary flex items-center justify-center gap-2">
+                         <RotateCcw className="w-5 h-5" /> Roll Again
+                       </motion.button>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-4 text-center">
+                <p className="text-muted-foreground font-display font-bold animate-pulse">Waiting for Opponent...</p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
 
-      <TurnTimerCountdown deadline={turnDeadline} isMyTurn={isMyTurn} />
+      <TurnTimerCountdown deadline={turnDeadline} isMyTurn={!myDone} />
 
       <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global", "room", "game"]} currentChannel="game" />
       <PlayerProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} playerName={profilePlayer} />

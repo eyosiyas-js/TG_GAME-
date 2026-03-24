@@ -3,6 +3,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { GameType } from '@prisma/client';
 
+export interface DiceState {
+  p1: string;
+  p2: string;
+  p1Rolls: number;
+  p2Rolls: number;
+  p1Score: number;
+  p2Score: number;
+  p1Done: boolean;
+  p2Done: boolean;
+  p1LastRoll: [number, number] | null;
+  p2LastRoll: [number, number] | null;
+}
+
 @Injectable()
 export class GameService {
   private queues: Map<string, string[]> = new Map(); // gameType_stake -> [userIds]
@@ -19,6 +32,8 @@ export class GameService {
     winnerId: string | null;
     paused: boolean;
   }> = new Map();
+
+  private diceGames: Map<string, DiceState> = new Map(); // matchId -> DiceState
 
   constructor(
     private prisma: PrismaService,
@@ -157,6 +172,21 @@ export class GameService {
         base.currentTurn = currentTurnUserId;
         base.isYourTurn = userId === currentTurnUserId;
         base.myUserId = userId;
+      }
+    } else if (match.gameType === 'DICE') {
+      const state = this.diceGames.get(match.id);
+      if (state) {
+        const isP1 = userId === state.p1;
+        base.diceState = {
+          myScore: isP1 ? state.p1Score : state.p2Score,
+          myRolls: isP1 ? state.p1Rolls : state.p2Rolls,
+          myDone: isP1 ? state.p1Done : state.p2Done,
+          myLastRoll: isP1 ? state.p1LastRoll : state.p2LastRoll,
+          opponentScore: isP1 ? state.p2Score : state.p1Score,
+          opponentRolls: isP1 ? state.p2Rolls : state.p1Rolls,
+          opponentDone: isP1 ? state.p2Done : state.p1Done,
+          opponentLastRoll: isP1 ? state.p2LastRoll : state.p1LastRoll,
+        };
       }
     }
 
@@ -418,6 +448,8 @@ export class GameService {
     const opponent = (match as any).participants.find((p: any) => p.userId !== forfeitUserId);
     const winnerId = opponent?.userId || null;
 
+    this.diceGames.delete(matchId);
+
     return this.prisma.$transaction(async (tx) => {
       await tx.match.update({
         where: { id: matchId },
@@ -659,6 +691,12 @@ export class GameService {
     });
 
     if (!match || match.status !== 'PLAYING') throw new Error('Invalid match');
+    
+    if (match.gameType === 'DICE') {
+      const diceResult = await this.submitDiceMove(userId, matchId, move);
+      return { ...diceResult, participants: match.participants, isDice: true };
+    }
+
     if (!match.participants.find((p: any) => p.userId === userId)) throw new Error('Not a participant');
     if (match.moves.find((m: any) => m.userId === userId)) throw new Error('Already moved');
 
@@ -677,8 +715,6 @@ export class GameService {
     if (updatedMatch && updatedMatch.moves.length === 2) {
       if (updatedMatch.gameType === 'RPS') {
         return this.finalizeRPS(matchId);
-      } else if (updatedMatch.gameType === 'DICE') {
-        return this.finalizeDice(matchId);
       } else if (updatedMatch.gameType === 'GUESS') {
         return this.finalizeGuess(matchId);
       }
@@ -742,35 +778,103 @@ export class GameService {
     });
   }
 
-  private async finalizeDice(matchId: string) {
+  initDiceGame(matchId: string, p1: string, p2: string) {
+    this.diceGames.set(matchId, {
+      p1, p2, p1Rolls: 0, p2Rolls: 0, p1Score: 0, p2Score: 0, p1Done: false, p2Done: false, p1LastRoll: null, p2LastRoll: null
+    });
+  }
+
+  async submitDiceMove(userId: string, matchId: string, move: string): Promise<any> {
+    const state = this.diceGames.get(matchId);
+    if (!state) return { status: 'error' };
+
+    const isP1 = userId === state.p1;
+    const isP2 = userId === state.p2;
+    if (!isP1 && !isP2) return { status: 'error' };
+
+    let updated = false;
+
+    if (move === 'roll' || move === 'roll_again') {
+      const pRolls = isP1 ? state.p1Rolls : state.p2Rolls;
+      const pDone = isP1 ? state.p1Done : state.p2Done;
+
+      if (pRolls < 2 && !pDone) {
+        const roll: [number, number] = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+        const score = roll[0] + roll[1];
+
+        if (isP1) {
+          state.p1Rolls++;
+          state.p1Score = score;
+          state.p1LastRoll = roll;
+        } else {
+          state.p2Rolls++;
+          state.p2Score = score;
+          state.p2LastRoll = roll;
+        }
+        updated = true;
+      }
+    } else if (move === 'keep' || move === 'done') {
+      const pDone = isP1 ? state.p1Done : state.p2Done;
+      if (!pDone) {
+        if (isP1) state.p1Done = true;
+        else state.p2Done = true;
+        updated = true;
+      }
+    }
+
+    if (state.p1Rolls >= 2) state.p1Done = true;
+    if (state.p2Rolls >= 2) state.p2Done = true;
+
+    if (state.p1Done && state.p2Done) {
+      const finishedMatch = await this.finalizeDiceGame(matchId, state);
+      this.diceGames.delete(matchId);
+      if (finishedMatch) {
+         return { 
+           status: 'FINISHED', 
+           isDice: true,
+           matchId, 
+           moves: finishedMatch.moves, 
+           winnerId: finishedMatch.winnerId, 
+           participants: finishedMatch.participants, 
+           stake: finishedMatch.stake 
+         };
+      }
+      return { status: 'error' };
+    }
+
+    return { status: updated ? 'update' : 'error', state, isDice: true };
+  }
+
+  getDiceState(matchId: string) {
+    return this.diceGames.get(matchId);
+  }
+
+  private async finalizeDiceGame(matchId: string, state: any) {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
-      include: { moves: true, participants: true },
+      include: { participants: true },
     });
     if (!match) return null;
 
-    // Generate rolls for both players (2 dice each)
-    const r1a = Math.floor(Math.random() * 6) + 1;
-    const r1b = Math.floor(Math.random() * 6) + 1;
-    const r2a = Math.floor(Math.random() * 6) + 1;
-    const r2b = Math.floor(Math.random() * 6) + 1;
+    const r1a = state.p1LastRoll?.[0] || 0;
+    const r1b = state.p1LastRoll?.[1] || 0;
+    const r2a = state.p2LastRoll?.[0] || 0;
+    const r2b = state.p2LastRoll?.[1] || 0;
 
-    const s1 = r1a + r1b;
-    const s2 = r2a + r2b;
+    const s1 = state.p1Score;
+    const s2 = state.p2Score;
 
-    // Update the moves with the real results for history
-    await this.prisma.matchMove.update({
-      where: { id: match.moves[0].id },
-      data: { move: `roll:${r1a},${r1b}` },
+    // Create MatchMove records
+    await this.prisma.matchMove.create({
+      data: { matchId, userId: state.p1, move: `roll:${r1a},${r1b}` },
     });
-    await this.prisma.matchMove.update({
-      where: { id: match.moves[1].id },
-      data: { move: `roll:${r2a},${r2b}` },
+    await this.prisma.matchMove.create({
+      data: { matchId, userId: state.p2, move: `roll:${r2a},${r2b}` },
     });
 
     let winnerId: string | null = null;
-    if (s1 > s2) winnerId = match.moves[0].userId;
-    else if (s2 > s1) winnerId = match.moves[1].userId;
+    if (s1 > s2) winnerId = state.p1;
+    else if (s2 > s1) winnerId = state.p2;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.match.update({
@@ -797,7 +901,7 @@ export class GameService {
 
       return tx.match.findUnique({
         where: { id: matchId },
-        include: { moves: true, participants: true },
+        include: { moves: true, participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true } } } } },
       });
     });
   }

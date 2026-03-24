@@ -334,6 +334,41 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             });
           });
         }
+      } else if ((match as any).gameType === 'DICE') {
+        const state = this.gameService.getDiceState(matchId);
+        if (state) {
+          const turnTimeMs = await this.gameService.getTurnTimeMs();
+          const deadline = Date.now() + turnTimeMs;
+
+          participants.forEach((p: any) => {
+            const isDone = p.userId === state.p1 ? state.p1Done : state.p2Done;
+            const timerKey = `${matchId}_${p.userId}`;
+            
+            if (!isDone && !this.turnTimers.has(timerKey)) {
+              this.server.to(p.userId).emit('startTurnTimer', { matchId, deadline, turnTimeMs });
+              const newTimer = setTimeout(async () => {
+                this.turnTimers.delete(timerKey);
+                const forfeitResult = await this.gameService.forfeitMatch(matchId, p.userId);
+                if (forfeitResult) {
+                  const parts = (forfeitResult as any).participants || [];
+                  parts.forEach((pp: any) => {
+                    const opponentUrl = parts.find((ppp: any) => ppp.userId !== pp.userId);
+                    const isWinner = pp.userId !== p.userId;
+                    this.server.to(pp.userId).emit('matchUpdate', {
+                      matchId, status: 'FINISHED', result: isWinner ? 'win' : 'lose',
+                      winnerId: isWinner ? pp.userId : opponentUrl?.userId,
+                      opponentName: opponentUrl?.user?.username || 'Opponent',
+                      stake: Number((forfeitResult as any).stake),
+                      reason: isWinner ? 'opponent_timeout' : 'timeout',
+                    });
+                    this.activeMatches.delete(pp.userId);
+                  });
+                }
+              }, turnTimeMs);
+              this.turnTimers.set(timerKey, newTimer);
+            }
+          });
+        }
       }
     } catch (e: any) {
       socket.emit('error', { message: e.message || 'Failed to rejoin' });
@@ -397,10 +432,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       // Pause the active turn timer so no one forfeits due to timeout
-      const activeTurnTimer = this.turnTimers.get(matchId);
-      if (activeTurnTimer) {
-        clearTimeout(activeTurnTimer);
-        this.turnTimers.delete(matchId);
+      for (const [key, tObj] of this.turnTimers.entries()) {
+        if (key === matchId || key.startsWith(`${matchId}_`)) {
+          clearTimeout(tObj);
+          this.turnTimers.delete(key);
+        }
       }
 
       // Pause the Bingo game state so no moves/auto-calls can fire
@@ -819,6 +855,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Initialize Bingo game if applicable
       if (match.gameType === 'BINGO') {
         await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+      } else if (match.gameType === 'DICE') {
+        this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
       }
     } catch (e: any) {
       socket.emit('roomError', { message: e.message });
@@ -895,7 +933,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
               });
             });
 
-            this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+            if (match.gameType === 'BINGO') {
+              this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+            } else if (match.gameType === 'DICE') {
+              this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
+            }
           } catch (e) {}
         });
         return;
@@ -931,6 +973,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       if (match.gameType === 'BINGO') {
         await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+      } else if (match.gameType === 'DICE') {
+        this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
+        // Start timers for both players - they roll independently
+        const turnTimeMs = await this.gameService.getTurnTimeMs();
+        const deadline = Date.now() + turnTimeMs;
+        participants.forEach((p: any) => {
+          this.server.to(p.userId).emit('startTurnTimer', { matchId: match.id, deadline, turnTimeMs });
+          const timer = setTimeout(async () => {
+             this.turnTimers.delete(`${match.id}_${p.userId}`);
+             await this.gameService.forfeitMatch(match.id, p.userId);
+             // Broadcast forfeit logic...
+          }, turnTimeMs);
+          this.turnTimers.set(`${match.id}_${p.userId}`, timer);
+        });
       }
     } catch (e: any) {
       socket.emit('error', { message: e.message });
@@ -1266,6 +1322,21 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('startRolling')
+  async handleStartRolling(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { matchId: string },
+  ) {
+    const userId = (socket.data.user as any).userId;
+    const match = await this.gameService.getMatchById(data.matchId);
+    const participants = (match as any)?.participants || [];
+    participants.forEach((p: any) => {
+      if (p.userId !== userId) {
+        this.server.to(p.userId).emit('opponentRolling', { matchId: data.matchId });
+      }
+    });
+  }
+
   @SubscribeMessage('submitMove')
   async handleMatchMove(
     @ConnectedSocket() socket: Socket,
@@ -1274,6 +1345,70 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = (socket.data.user as any).userId;
       const result = await this.gameService.submitMove(userId, data.matchId, data.move);
+
+      if (result && (result as any).isDice) {
+        if ((result as any).status === 'update') {
+          const state = (result as any).state;
+          const participants = (result as any).participants || [];
+          
+          // Clear and restart timer ONLY for the moving player if not done
+          const timerKey = `${data.matchId}_${userId}`;
+          const existingTimer = this.turnTimers.get(timerKey);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+            this.turnTimers.delete(timerKey);
+          }
+
+          const turnTimeMs = await this.gameService.getTurnTimeMs();
+          const deadline = Date.now() + turnTimeMs;
+
+          participants.forEach((p: any) => {
+            const pUpdate = {
+              myScore: p.userId === state.p1 ? state.p1Score : state.p2Score,
+              myRolls: p.userId === state.p1 ? state.p1Rolls : state.p2Rolls,
+              myDone: p.userId === state.p1 ? state.p1Done : state.p2Done,
+              myLastRoll: p.userId === state.p1 ? state.p1LastRoll : state.p2LastRoll,
+              opponentScore: p.userId === state.p1 ? state.p2Score : state.p1Score,
+              opponentRolls: p.userId === state.p1 ? state.p2Rolls : state.p1Rolls,
+              opponentDone: p.userId === state.p1 ? state.p1Done : state.p2Done,
+              opponentLastRoll: p.userId === state.p1 ? state.p2LastRoll : state.p1LastRoll,
+            };
+            this.server.to(p.userId).emit('diceUpdate', pUpdate);
+
+            // Restart timer for the player who just moved IF they are not done
+            const isMe = p.userId === userId;
+            const myDone = p.userId === state.p1 ? state.p1Done : state.p2Done;
+            if (isMe && !myDone) {
+              this.server.to(p.userId).emit('startTurnTimer', { matchId: data.matchId, deadline, turnTimeMs });
+              const newTimer = setTimeout(async () => {
+                this.turnTimers.delete(timerKey);
+                const forfeitResult = await this.gameService.forfeitMatch(data.matchId, userId);
+                if (forfeitResult) {
+                  const parts = (forfeitResult as any).participants || [];
+                  parts.forEach((pp: any) => {
+                    const opponentUrl = parts.find((ppp: any) => ppp.userId !== pp.userId);
+                    const isWinner = pp.userId !== userId;
+                    this.server.to(pp.userId).emit('matchUpdate', {
+                      matchId: data.matchId,
+                      status: 'FINISHED',
+                      result: isWinner ? 'win' : 'lose',
+                      winnerId: isWinner ? pp.userId : opponentUrl?.userId,
+                      opponentName: opponentUrl?.user?.username || 'Opponent',
+                      stake: Number((forfeitResult as any).stake),
+                      reason: isWinner ? 'opponent_timeout' : 'timeout',
+                    });
+                    this.activeMatches.delete(pp.userId);
+                  });
+                }
+              }, turnTimeMs);
+              this.turnTimers.set(timerKey, newTimer);
+            }
+          });
+          return;
+        } else if ((result as any).status === 'finished') {
+          (result as any).status = 'FINISHED';
+        }
+      }
 
       if (result && (result as any).status === 'FINISHED') {
         const timerObj = this.turnTimers.get(data.matchId);
