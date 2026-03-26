@@ -39,4 +39,9 @@ export class AdminController {
   getLiveGames() {
     return this.adminService.getLiveGames();
   }
+
+  @Get('tables/:tableName')
+  getTableData(@Param('tableName') tableName: string) {
+    return this.adminService.getTableData(tableName);
+  }
 }

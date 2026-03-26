@@ -57,6 +57,25 @@ export class AdminService {
     });
   }
 
+  async getTableData(tableName: string) {
+    const allowedModels: Record<string, string> = {
+      User: 'user',
+      SystemSetting: 'systemSetting',
+      Wallet: 'wallet',
+      Match: 'match',
+      MatchMove: 'matchMove',
+      MatchParticipant: 'matchParticipant',
+      Transaction: 'transaction',
+    };
+
+    const modelName = allowedModels[tableName];
+    if (!modelName) {
+      throw new Error(`Invalid table name: ${tableName}`);
+    }
+
+    return (this.prisma as any)[modelName].findMany();
+  }
+
   getLiveGames() {
     return this.gameService.getAdminLiveGames();
   }
