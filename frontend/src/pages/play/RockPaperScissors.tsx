@@ -31,9 +31,11 @@ const RockPaperScissors = () => {
   const [revealCountdown, setRevealCountdown] = useState(3);
   const [showConfetti, setShowConfetti] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
+  const [winAmount, setWinAmount] = useState<number | null>(null);
   const [isMyTurn, setIsMyTurn] = useState(true);
   const { shake, shakeClass } = useScreenShake();
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const timer = useMatchTimer();
   const socketRef = useRef<any>(null);
   const queryClient = useQueryClient();
@@ -105,6 +107,7 @@ const RockPaperScissors = () => {
           setPlayerChoice(serverYourMove);
           setOpponentChoice(serverOpponentMove);
           setResult(serverResult);
+          setWinAmount(data.winAmount || null);
           setGameState("result");
 
           // Clear the active-match cache so homepage banner disappears
@@ -138,6 +141,7 @@ const RockPaperScissors = () => {
             timer.stop();
             setOpponentChoice(serverOpponentMove);
             setResult(serverResult);
+            setWinAmount(data.winAmount || null);
             setGameState("result");
 
             // Clear the active-match cache so homepage banner disappears
@@ -163,7 +167,7 @@ const RockPaperScissors = () => {
     });
 
     socketRef.current.on("startTurnTimer", (data: any) => {
-      setTurnDeadline(Date.now() + data.turnTimeMs);
+      setTurnDeadline(data.remainingMs ?? null);
     });
 
     socketRef.current.on("moveAccepted", () => {});
@@ -197,6 +201,28 @@ const RockPaperScissors = () => {
       }
     });
 
+    // timerFrozen: emitted to ALL players when someone disconnects.
+    // Freeze the turn timer display so no one sees a running clock while game is paused.
+    socketRef.current.on("timerFrozen", () => {
+      setTurnDeadline(null);
+    });
+
+    // Dual-disconnect: this player rejoined but the opponent is still gone.
+    // Show the waiting overlay rather than resuming the game.
+    socketRef.current.on("opponentStillDisconnected", (data: any) => {
+      setOpponentDisconnected(true);
+      setTurnDeadline(null);
+      const deadline = data.reconnectDeadline;
+      if (deadline) {
+        const updateCountdown = () => {
+          const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+          setDisconnectCountdown(remaining);
+        };
+        updateCountdown();
+        disconnectTimerRef.current = setInterval(updateCountdown, 1000);
+      }
+    });
+
     // Rejoin: server tells us we have an active match after socket reconnects
     socketRef.current.on("rejoinedMatch", (data: any) => {
       setMatchId(data.matchId);
@@ -205,7 +231,12 @@ const RockPaperScissors = () => {
       setStake(data.stake || 200);
       if (gameState === "lobby" || gameState === "matching") {
         setGameState("playing");
-        timer.start();
+        // Restore elapsed timer from server-provided match start time
+        if (data.matchStartedAt) {
+          timer.startFrom(data.matchStartedAt);
+        } else {
+          timer.start();
+        }
       }
     });
 
@@ -449,8 +480,10 @@ const RockPaperScissors = () => {
         {gameState === "match-found" && (
           <PlayerMatchTransition
             onComplete={handleMatchTransitionComplete}
-            player1={{ name: myName, level: 1, wins: 0, streak: 0 }}
-            player2={{ name: opponentName, level: opponentLevel, wins: 0, streak: 0 }}
+            players={[
+              { name: myName, level: 1, wins: 0, streak: 0 },
+              { name: opponentName, level: opponentLevel, wins: 0, streak: 0 },
+            ]}
           />
         )}
       </AnimatePresence>
@@ -474,7 +507,7 @@ const RockPaperScissors = () => {
             </div>
             <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
               <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+              {hasUnreadChat && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500" />}
             </motion.button>
           </div>
         </motion.div>
@@ -536,7 +569,7 @@ const RockPaperScissors = () => {
                   </motion.p>
                 )}
                 <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={`text-xl font-display font-bold ${result === "win" ? "text-primary" : result === "lose" ? "text-destructive" : "text-muted-foreground"}`}>
-                  {result === "win" ? `+$${stake}` : result === "lose" ? `-$${stake}` : "$0"}
+                  {result === "win" ? `+$${winAmount ? winAmount - stake : stake}` : result === "lose" ? `-$${stake}` : "$0"}
                 </motion.span>
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground flex items-center gap-1">
                   <Timer className="w-3 h-3" /> Match duration: {timer.formatted}
@@ -586,9 +619,9 @@ const RockPaperScissors = () => {
         )}
       </div>
 
-      <TurnTimerCountdown deadline={turnDeadline} isMyTurn={isMyTurn} />
+      <TurnTimerCountdown remainingMs={turnDeadline} isMyTurn={isMyTurn} />
 
-      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global", "game"]} currentChannel="game" />
+      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" socketRef={socketRef} gameType="RPS" matchId={matchId || undefined} onUnreadMessagesChange={setHasUnreadChat} />
     </PageTransition>
   );
 };

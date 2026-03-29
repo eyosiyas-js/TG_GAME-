@@ -42,6 +42,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
   const [joinCode, setJoinCode] = useState("");
   const [lobbyView, setLobbyView] = useState<LobbyView>("select");
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [customStake, setCustomStake] = useState(String(stake));
   const quickStakeOptions = [50, 100, 300, 500];
@@ -206,6 +207,11 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
             {codeCopied ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
             {roomData.code}
           </button>
+          {/* Chat Button */}
+          <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
+            <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
+            {hasUnreadChat && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500" />}
+          </motion.button>
         </div>
 
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-4xl text-center mb-6">
@@ -230,7 +236,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
             maxPlayers={roomData.maxPlayers}
           />
         </div>
-        <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global"]} />
+        <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global", "room"]} currentChannel="room" socketRef={socketRef} gameType={gameType} roomId={roomData.roomId} onUnreadMessagesChange={setHasUnreadChat} />
       </div>
     );
   }
@@ -248,7 +254,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
         </div>
         <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
           <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+          {hasUnreadChat && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500" />}
         </motion.button>
       </div>
 
@@ -386,7 +392,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
         </motion.button>
       )}
 
-      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global"]} />
+      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global"]} socketRef={socketRef} gameType={gameType} onUnreadMessagesChange={setHasUnreadChat} />
       <CreateRoomDialog isOpen={createRoomOpen} onClose={() => setCreateRoomOpen(false)} onCreateRoom={handleCreateRoom} gameName={gameName} isBingo={isBingo} />
     </div>
   );

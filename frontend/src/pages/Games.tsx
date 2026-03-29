@@ -115,7 +115,11 @@ const Games = () => {
                     isWinner ? "text-primary" : "text-destructive"
                   }`}
                 >
-                  {isWinner ? "+" : "-"}${Number(match.stake).toLocaleString()}
+                  {isWinner ? "+" : "-"}${Number(
+                    isWinner && match.transactions?.length > 0 
+                      ? match.transactions[0].amount - Number(match.stake)
+                      : match.stake
+                  ).toLocaleString()}
                 </p>
               </motion.div>
             );

@@ -35,4 +35,17 @@ export class GameController {
   getActiveMatches() {
     return this.gameService.getActiveMatches();
   }
+
+  @Get('platform-status')
+  async getPlatformStatus() {
+    const maintenanceMode = await this.gameService.isMaintenanceMode();
+    const gameTypes = ['BINGO', 'RPS', 'DICE', 'GUESS'];
+    const disabledGames: string[] = [];
+    for (const gt of gameTypes) {
+      if (!(await this.gameService.isGameEnabled(gt))) {
+        disabledGames.push(gt);
+      }
+    }
+    return { maintenanceMode, disabledGames };
+  }
 }

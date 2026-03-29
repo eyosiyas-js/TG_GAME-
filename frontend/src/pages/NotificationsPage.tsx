@@ -1,25 +1,18 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, Gamepad2, DollarSign, Bell, Trophy, UserPlus, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 interface Notification {
   id: string;
-  type: "invite" | "result" | "system" | "deposit";
+  type: "invite" | "result" | "system" | "deposit" | string;
   title: string;
   message: string;
-  time: string;
+  createdAt: string;
   read: boolean;
 }
-
-const mockNotifications: Notification[] = [
-  { id: "1", type: "invite", title: "Game Invite", message: "Player_42 invited you to Rock Paper Scissors ($200 stake)", time: "2 min ago", read: false },
-  { id: "2", type: "result", title: "Match Result", message: "You won $500 in Bingo!", time: "15 min ago", read: false },
-  { id: "3", type: "invite", title: "Rematch Request", message: "Lucky_13 wants a rematch in Dice Battle", time: "1 hr ago", read: true },
-  { id: "4", type: "system", title: "Welcome Bonus", message: "You've received a $100 welcome bonus!", time: "2 hrs ago", read: true },
-  { id: "5", type: "deposit", title: "Deposit Confirmed", message: "Your deposit of $500 has been confirmed", time: "1 day ago", read: true },
-  { id: "6", type: "result", title: "Leaderboard Update", message: "You moved up to #12 on the weekly leaderboard", time: "2 days ago", read: true },
-];
 
 const iconMap = {
   invite: UserPlus,
@@ -29,17 +22,46 @@ const iconMap = {
 };
 
 const NotificationsPage = () => {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const token = localStorage.getItem("token") || "";
+  const queryClient = useQueryClient();
+
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.get("/notifications", token),
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => api.put(`/notifications/${id}/read`, {}, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.put("/notifications/read-all", {}, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/notifications/${id}`, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    markAllReadMutation.mutate();
   };
 
   const dismiss = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    deleteMutation.mutate(id);
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const unreadCount = notifications.filter((n: Notification) => !n.read).length;
 
   return (
     <div className="px-4 pt-6 pb-24">
@@ -73,15 +95,18 @@ const NotificationsPage = () => {
             <p className="text-sm text-muted-foreground">No notifications yet</p>
           </div>
         ) : (
-          notifications.map((n, i) => {
-            const Icon = iconMap[n.type];
+          notifications.map((n: Notification, i: number) => {
+            const Icon = iconMap[n.type as keyof typeof iconMap] || Bell;
             return (
               <motion.div
                 key={n.id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className={`card-game rounded-xl p-3.5 flex items-start gap-3 relative ${!n.read ? "ring-1 ring-primary/30" : ""}`}
+                onClick={() => {
+                  if (!n.read) markReadMutation.mutate(n.id);
+                }}
+                className={`card-game rounded-xl p-3.5 flex items-start gap-3 relative cursor-pointer transition-colors hover:bg-muted/50 ${!n.read ? "ring-1 ring-primary/30" : ""}`}
               >
                 {!n.read && <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-primary" />}
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -98,11 +123,16 @@ const NotificationsPage = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-display font-semibold text-foreground">{n.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{n.time}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(n.createdAt))}
+                  </p>
                 </div>
                 <motion.button
                   whileTap={{ scale: 0.8 }}
-                  onClick={() => dismiss(n.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismiss(n.id);
+                  }}
                   className="w-6 h-6 rounded-md bg-muted flex items-center justify-center shrink-0 mt-1"
                 >
                   <X className="w-3 h-3 text-muted-foreground" />

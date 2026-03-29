@@ -1,4 +1,4 @@
-import { ChevronRight, Users } from "lucide-react";
+import { ChevronRight, Users, Ban } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { sounds } from "@/components/game/AnimationEffects";
@@ -12,10 +12,32 @@ interface GameCardProps {
     emoji: string;
     gradient: string;
     path: string;
+    comingSoon?: boolean;
+    disabled?: boolean;
   };
 }
 
 const GameCard = ({ game }: GameCardProps) => {
+  if (game.disabled) {
+    return (
+      <div className="block opacity-60 pointer-events-none">
+        <div className="card-game rounded-2xl p-4 flex items-center gap-4 grayscale">
+          <div className={`w-14 h-14 rounded-xl bg-muted flex items-center justify-center text-2xl shrink-0`}>
+            <span>{game.emoji}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-display font-bold text-foreground">{game.name}</h4>
+            <div className="mt-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-destructive/10 border border-destructive/30 text-[10px] font-display font-bold uppercase tracking-wider text-destructive shadow-sm">
+                <Ban className="w-3 h-3" /> Temporarily Unavailable
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Link to={game.path} onClick={() => sounds.tap()} className="block">
       <motion.div
@@ -37,18 +59,26 @@ const GameCard = ({ game }: GameCardProps) => {
         </motion.div>
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-display font-bold text-foreground">{game.name}</h4>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="text-xs text-muted-foreground">{game.players}</span>
-            <div className="flex items-center gap-1 text-xs text-primary">
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                <Users className="w-3 h-3" />
-              </motion.div>
-              <span>{game.activePlayers.toLocaleString()}</span>
+          {game.comingSoon ? (
+            <div className="mt-1">
+              <span className="inline-block px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] font-display font-bold uppercase tracking-wider text-muted-foreground shadow-sm">
+                Coming Soon
+              </span>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-xs text-muted-foreground">{game.players}</span>
+              <div className="flex items-center gap-1 text-xs text-primary">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <Users className="w-3 h-3" />
+                </motion.div>
+                <span>{game.activePlayers.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
         </div>
         <motion.div
           className="shrink-0"

@@ -39,4 +39,19 @@ export class AdminController {
   getLiveGames() {
     return this.adminService.getLiveGames();
   }
+
+  @Get('revenue')
+  getRevenue() {
+    return this.adminService.getRevenueAnalytics();
+  }
+
+  @Get('game-states')
+  getGameStates() {
+    return this.adminService.getGameStates();
+  }
+
+  @Get('maintenance')
+  getMaintenanceStatus() {
+    return this.adminService.getMaintenanceStatus();
+  }
 }

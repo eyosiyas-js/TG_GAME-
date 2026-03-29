@@ -50,6 +50,7 @@ const BingoGame = () => {
   const [winner, setWinner] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [currentMatch, setCurrentMatch] = useState<any>(null);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [matchResult, setMatchResult] = useState<any>(null);
@@ -135,8 +136,8 @@ const BingoGame = () => {
         console.log("[BINGO FE] Ignoring startTurnTimer — opponent disconnected");
         return;
       }
-      console.log("[BINGO FE] startTurnTimer:", { isYourTurn: data.isYourTurn, deadline: data.deadline });
-      setTurnDeadline(data.deadline);
+      console.log("[BINGO FE] startTurnTimer:", { isYourTurn: data.isYourTurn, remainingMs: data.remainingMs });
+      setTurnDeadline(data.remainingMs ?? null);
       setIsMyTurn(data.isYourTurn === true);
     });
 
@@ -186,7 +187,12 @@ const BingoGame = () => {
       setIsMyTurn(data.isYourTurn === true);
       if (gameState === "lobby" || gameState === "matching") {
         setGameState("playing");
-        timer.start();
+        // Restore the match elapsed timer from the server-provided start time
+        if (data.matchStartedAt) {
+          timer.startFrom(data.matchStartedAt);
+        } else {
+          timer.start();
+        }
       }
     });
 
@@ -209,6 +215,12 @@ const BingoGame = () => {
       timer.pause(); // Pause our visual timer while waiting
     });
 
+    // timerFrozen: emitted to ALL players when ANY player disconnects.
+    // Freeze the turn timer display so no one sees a running clock while game is paused.
+    socketRef.current.on("timerFrozen", () => {
+      setTurnDeadline(null);
+    });
+
     socketRef.current.on("opponentReconnected", () => {
       setOpponentDisconnected(false);
       opponentDisconnectedRef.current = false;
@@ -218,6 +230,28 @@ const BingoGame = () => {
         disconnectTimerRef.current = null;
       }
       timer.resume(); // Resume timer
+    });
+
+    // Dual-disconnect: this player rejoined but the opponent is still gone.
+    // Show the waiting overlay rather than resuming the game.
+    socketRef.current.on("opponentStillDisconnected", (data: any) => {
+      setOpponentDisconnected(true);
+      opponentDisconnectedRef.current = true;
+      setDisconnectedOpponentName(data.opponentName || "Opponent");
+      setTurnDeadline(null);
+      const deadline = data.reconnectDeadline;
+      if (deadline) {
+        const updateCountdown = () => {
+          const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+          setDisconnectCountdown(remaining);
+          if (remaining <= 0) {
+            clearInterval(disconnectTimerRef.current);
+            disconnectTimerRef.current = null;
+          }
+        };
+        updateCountdown();
+        disconnectTimerRef.current = setInterval(updateCountdown, 1000);
+      }
     });
 
     socketRef.current.on("playerForfeited", (data: any) => {
@@ -413,7 +447,20 @@ const BingoGame = () => {
             <h2 className={`text-3xl font-display font-extrabold ${isWinner ? "text-primary" : "text-destructive"}`}>
               {isWinner ? "YOU WON! 🎉" : "YOU LOST 💀"}
             </h2>
-            <p className="text-muted-foreground mt-1">{isWinner ? `Won $${stake * playerCount}!` : `Lost $${stake}`}</p>
+            {isWinner && matchResult?.commission ? (
+              <div className="bg-background/50 border border-border rounded-xl p-3 mt-3 w-56 text-left space-y-1.5 flex flex-col">
+                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>${stake}</span></div>
+                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>${stake * playerCount}</span></div>
+                <div className="flex justify-between text-xs text-destructive font-display">
+                  <span>Commission ({Math.round((matchResult.commission / (stake * playerCount)) * 100)}%):</span> 
+                  <span>-${matchResult.commission}</span>
+                </div>
+                <div className="h-px bg-border my-1 w-full" />
+                <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+${matchResult.winAmount - stake}</span></div>
+              </div>
+            ) : (
+              <p className="text-muted-foreground mt-1">{isWinner ? `Won +$${matchResult?.winAmount ? matchResult.winAmount - stake : stake * (playerCount - 1)}!` : `Lost -$${stake}`}</p>
+            )}
             {matchResult?.reason === "opponent_timeout" && (
               <p className="text-xs text-primary mt-1">Opponent ran out of time!</p>
             )}
@@ -607,7 +654,7 @@ const BingoGame = () => {
         )}
       </AnimatePresence>
 
-      <TurnTimerCountdown deadline={turnDeadline} isMyTurn={isMyTurn} />
+      <TurnTimerCountdown remainingMs={turnDeadline} isMyTurn={isMyTurn} />
 
       <div className="px-4 pt-6 min-h-screen flex flex-col">
         {/* Header */}
@@ -627,7 +674,7 @@ const BingoGame = () => {
             </div>
             <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
               <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+              {hasUnreadChat && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500" />}
             </motion.button>
           </div>
         </motion.div>
@@ -785,7 +832,7 @@ const BingoGame = () => {
         </p>
       </div>
 
-      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" />
+      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" socketRef={socketRef} gameType="BINGO" matchId={currentMatch?.matchId} onUnreadMessagesChange={setHasUnreadChat} />
     </PageTransition>
   );
 };

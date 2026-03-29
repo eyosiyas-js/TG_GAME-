@@ -1,29 +1,34 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 interface TurnTimerCountdownProps {
-  deadline: number | null;
+  remainingMs: number | null;
   isMyTurn: boolean;
 }
 
-export default function TurnTimerCountdown({ deadline, isMyTurn }: TurnTimerCountdownProps) {
+export default function TurnTimerCountdown({ remainingMs, isMyTurn }: TurnTimerCountdownProps) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  // Record exactly when the timer event was received to avoid clock drift
+  const receivedAtRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!deadline) {
+    if (remainingMs === null) {
       setTimeLeft(null);
       return;
     }
+    // Record the receipt time once per new timer event
+    receivedAtRef.current = Date.now();
     const update = () => {
-      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      const elapsed = Date.now() - receivedAtRef.current;
+      const remaining = Math.max(0, Math.ceil((remainingMs - elapsed) / 1000));
       setTimeLeft(remaining);
     };
     update();
-    const interval = setInterval(update, 250); // Update more frequently for smoother countdown
+    const interval = setInterval(update, 250);
     return () => clearInterval(interval);
-  }, [deadline]);
+  }, [remainingMs]);
 
-  if (deadline === null || timeLeft === null) return null;
+  if (remainingMs === null || timeLeft === null) return null;
 
   const isWarning = timeLeft <= 5 && isMyTurn;
   const label = isMyTurn ? "⏱ Your turn" : "⏱ Opponent thinking";

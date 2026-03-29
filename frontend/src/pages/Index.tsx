@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle } from "lucide-react";
+import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import GameCard from "@/components/GameCard";
 import { staggerContainer, staggerItem } from "@/components/game/AnimationEffects";
@@ -24,7 +24,7 @@ const gameEmojis: Record<string, string> = {
 const games = [
   { id: "rps", name: "Rock Paper Scissors", players: "1v1", activePlayers: 12, emoji: "✊", gradient: "from-primary/20 to-primary/5", path: "/play/rps" },
   { id: "bingo", name: "Bingo", players: "1v1", activePlayers: 8, emoji: "🎱", gradient: "from-secondary/20 to-secondary/5", path: "/play/bingo" },
-  { id: "guess", name: "Guess My Number", players: "1v1", activePlayers: 6, emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess" },
+  { id: "guess", name: "Guess My Number", players: "1v1", activePlayers: 6, emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess", comingSoon: true },
   { id: "dice", name: "Dice Battle", players: "1v1", activePlayers: 10, emoji: "🎲", gradient: "from-primary/20 to-accent/5", path: "/play/dice" },
 ];
 
@@ -33,6 +33,8 @@ const Index = () => {
   const username = localStorage.getItem("username") || "Player";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // "expired" = match ended before user clicked Rejoin
+  const [rejoinStatus, setRejoinStatus] = useState<"idle" | "checking" | "expired">("idle");
 
   const { data: balance, isLoading: balanceLoading } = useQuery({
     queryKey: ["wallet-balance"],
@@ -52,6 +54,15 @@ const Index = () => {
     refetchInterval: dismissedMatchIds.size > 0 ? false : 10000,
   });
 
+  const { data: platformStatus } = useQuery({
+    queryKey: ["platform-status"],
+    queryFn: () => api.get("/game/platform-status"),
+    refetchInterval: 15000,
+  });
+
+  const maintenanceMode = platformStatus?.maintenanceMode || false;
+  const disabledGames: string[] = platformStatus?.disabledGames || [];
+
   // Only show banner if match exists AND hasn't been dismissed
   const showRejoinBanner = activeMatch && activeMatch.matchId && !dismissedMatchIds.has(activeMatch.matchId);
 
@@ -70,6 +81,47 @@ const Index = () => {
     }
   };
 
+  // Validate the match is still ACTIVE before rejoining
+  const handleRejoin = async () => {
+    if (!activeMatch?.matchId || rejoinStatus === "checking") return;
+    setRejoinStatus("checking");
+    try {
+      // Re-fetch the latest match state from the server
+      const latest = await api.get("/game/active-match", token);
+      if (!latest || !latest.matchId) {
+        // Match is finished — show expired state
+        setRejoinStatus("expired");
+        queryClient.setQueryData(["active-match"], null);
+        // Auto-dismiss after 4 seconds
+        setTimeout(() => {
+          setDismissedMatchIds(prev => new Set(prev).add(activeMatch.matchId));
+          setRejoinStatus("idle");
+        }, 4000);
+        return;
+      }
+    } catch {
+      // API error — treat as expired to be safe
+      setRejoinStatus("expired");
+      queryClient.setQueryData(["active-match"], null);
+      setTimeout(() => {
+        setDismissedMatchIds(prev => new Set(prev).add(activeMatch.matchId));
+        setRejoinStatus("idle");
+      }, 4000);
+      return;
+    }
+    // Match is still active — navigate in
+    setRejoinStatus("idle");
+    navigate(gameRoutes[activeMatch.gameType] || "/play/rps", { state: { rejoin: activeMatch } });
+  };
+
+
+  const { data: unreadData } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.get("/notifications", token),
+    refetchInterval: 30000,
+  });
+  const unreadCount = unreadData ? unreadData.filter((n: any) => !n.read).length : 0;
+
   if (balanceLoading || statsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -78,31 +130,35 @@ const Index = () => {
     );
   }
 
-  return (
-    <div className="px-4 pt-6 pb-20">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="flex items-center justify-between mb-6"
-      >
-        <div>
-          <motion.p initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-muted-foreground text-xs font-body uppercase tracking-widest">
-            Welcome back,
-          </motion.p>
-          <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="text-xl font-display font-bold text-foreground">
-            {username}
-          </motion.h1>
-        </div>
-        <Link to="/notifications" className="relative group">
-          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border border-border/50 group-hover:bg-muted/80">
-            <Bell className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+      return (
+        <div className="px-4 pt-6 pb-20">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="flex items-center justify-between mb-6"
+          >
+            <div>
+              <motion.p initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-muted-foreground text-xs font-body uppercase tracking-widest">
+                Welcome back,
+              </motion.p>
+              <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="text-xl font-display font-bold text-foreground">
+                {username}
+              </motion.h1>
+            </div>
+            <Link to="/notifications" className="relative group">
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border border-border/50 group-hover:bg-muted/80">
+                <Bell className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </motion.div>
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary badge-pulse" />
+                </>
+              )}
+            </Link>
           </motion.div>
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary badge-pulse" />
-        </Link>
-      </motion.div>
 
       {/* Rejoin Active Match Banner */}
       {showRejoinBanner && (
@@ -134,20 +190,31 @@ const Index = () => {
               <span className="text-2xl ml-auto">{gameEmojis[activeMatch.gameType] || "🎮"}</span>
             </div>
             <div className="flex gap-2">
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(gameRoutes[activeMatch.gameType] || "/play/rps", { state: { rejoin: activeMatch } })}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-display font-bold text-sm shadow-lg"
-              >
-                Rejoin Game
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={dismissRejoin}
-                className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border"
-              >
-                Decline
-              </motion.button>
+              {rejoinStatus === "expired" ? (
+                <div className="flex-1 py-2.5 rounded-xl bg-destructive/20 border border-destructive/40 text-destructive font-display font-bold text-sm text-center">
+                  ⏱ Too Late — Match Already Over
+                </div>
+              ) : (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleRejoin}
+                  disabled={rejoinStatus === "checking"}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-display font-bold text-sm shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {rejoinStatus === "checking" ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Checking...</>
+                  ) : "Rejoin Game"}
+                </motion.button>
+              )}
+              {rejoinStatus !== "expired" && (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={dismissRejoin}
+                  className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border"
+                >
+                  Decline
+                </motion.button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -185,6 +252,32 @@ const Index = () => {
       </motion.div>
 
       {/* Games */}
+      {maintenanceMode ? (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mt-2 mb-8">
+          <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 p-8 text-center">
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center mx-auto mb-4"
+            >
+              <Wrench className="w-8 h-8 text-amber-500" />
+            </motion.div>
+            <h3 className="text-lg font-display font-bold text-foreground mb-2">Under Maintenance</h3>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              We are currently performing updates. Please wait while we improve your experience.
+            </p>
+            <motion.div
+              className="mt-4 flex items-center justify-center gap-2"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-xs text-amber-500 font-display font-bold uppercase tracking-widest">Updating</span>
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+            </motion.div>
+          </div>
+        </motion.div>
+      ) : (
       <motion.div variants={staggerContainer} initial="hidden" animate="show">
         <motion.div variants={staggerItem} className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-display font-bold text-foreground uppercase tracking-widest">Available Games</h3>
@@ -196,13 +289,18 @@ const Index = () => {
           </div>
         </motion.div>
         <div className="space-y-3">
-          {games.map((game, i) => (
-            <motion.div key={game.id} variants={staggerItem} custom={i}>
-              <GameCard game={game} />
-            </motion.div>
-          ))}
+          {games.map((game, i) => {
+            const gameTypeMap: Record<string, string> = { rps: 'RPS', bingo: 'BINGO', guess: 'GUESS', dice: 'DICE' };
+            const isDisabled = disabledGames.includes(gameTypeMap[game.id] || '');
+            return (
+              <motion.div key={game.id} variants={staggerItem} custom={i}>
+                <GameCard game={{ ...game, disabled: isDisabled }} />
+              </motion.div>
+            );
+          })}
         </div>
       </motion.div>
+      )}
 
       {/* Leaderboard Teaser */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, type: "spring" }} className="mt-8 mb-4">

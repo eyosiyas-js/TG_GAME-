@@ -73,6 +73,7 @@ const DiceBattle = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const { shake, shakeClass } = useScreenShake();
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profilePlayer, setProfilePlayer] = useState<string | null>(null);
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
@@ -109,6 +110,11 @@ const DiceBattle = () => {
         if (ds.myLastRoll && ds.myLastRoll[0]) setPlayerDice(ds.myLastRoll);
         if (ds.opponentLastRoll && ds.opponentLastRoll[0]) setOpponentRoll(ds.opponentLastRoll);
         setLanded(true);
+      }
+
+      // Restore elapsed match timer from server timestamp
+      if (match.matchStartedAt) {
+        timer.startFrom(match.matchStartedAt);
       }
     });
 
@@ -155,7 +161,7 @@ const DiceBattle = () => {
     });
 
     socketRef.current.on("startTurnTimer", (data: any) => {
-      setTurnDeadline(Date.now() + data.turnTimeMs);
+      setTurnDeadline(data.remainingMs ?? null);
     });
 
     socketRef.current.on("diceUpdate", (data: any) => {
@@ -215,6 +221,8 @@ const DiceBattle = () => {
 
     socketRef.current.on("opponentDisconnected", (data: any) => {
       setOpponentDisconnected(true);
+      // Freeze the turn timer display — timers are paused on the server
+      setTurnDeadline(null);
       const deadline = data.reconnectDeadline;
       const updateCountdown = () => {
         const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -222,6 +230,12 @@ const DiceBattle = () => {
       };
       updateCountdown();
       disconnectTimerRef.current = setInterval(updateCountdown, 1000);
+    });
+
+    // timerFrozen: emitted to ALL players the moment someone disconnects.
+    // Freeze the turn timer display so no one sees a running clock while game is paused.
+    socketRef.current.on("timerFrozen", () => {
+      setTurnDeadline(null);
     });
 
     socketRef.current.on("opponentReconnected", () => {
@@ -237,6 +251,22 @@ const DiceBattle = () => {
       if (disconnectTimerRef.current) {
         clearInterval(disconnectTimerRef.current);
         disconnectTimerRef.current = null;
+      }
+    });
+
+    // Dual-disconnect: this player rejoined but the opponent is still gone.
+    // Show the waiting overlay rather than resuming.
+    socketRef.current.on("opponentStillDisconnected", (data: any) => {
+      setOpponentDisconnected(true);
+      setTurnDeadline(null);
+      const deadline = data.reconnectDeadline;
+      if (deadline) {
+        const updateCountdown = () => {
+          const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+          setDisconnectCountdown(remaining);
+        };
+        updateCountdown();
+        disconnectTimerRef.current = setInterval(updateCountdown, 1000);
       }
     });
 
@@ -271,7 +301,7 @@ const DiceBattle = () => {
         }
 
         setTimeout(() => {
-           socketRef.current?.emit("reconnect", { matchId: match.id }); 
+           socketRef.current?.emit("requestRejoin", { matchId: match.id }); 
         }, 500);
       }
     });
@@ -469,9 +499,22 @@ const DiceBattle = () => {
               {currentMatch?.reason === 'forfeit' && !isWinner && (
                 <p className="text-sm font-bold text-destructive mt-2">You forfeited the match.</p>
               )}
-              <p className="text-sm text-muted-foreground mt-3">
-                {isWinner ? `Won $${stake * 2}!` : isDraw ? "Stake refunded!" : `Lost $${stake}`}
-              </p>
+              {isWinner && currentMatch?.commission ? (
+                <div className="bg-background/50 border border-border rounded-xl p-3 mt-4 mx-auto w-56 text-left space-y-1.5 flex flex-col">
+                  <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>${stake}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>${stake * 2}</span></div>
+                  <div className="flex justify-between text-xs text-destructive font-display">
+                    <span>Commission ({Math.round((currentMatch.commission / (stake * 2)) * 100)}%):</span> 
+                    <span>-${currentMatch.commission}</span>
+                  </div>
+                  <div className="h-px bg-border my-1 w-full" />
+                  <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+${currentMatch.winAmount - stake}</span></div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-3">
+                  {isWinner ? `Won +$${currentMatch?.winAmount ? currentMatch.winAmount - stake : stake}!` : isDraw ? "Stake refunded!" : `Lost -$${stake}`}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
                 <Timer className="w-3 h-3" /> Match duration: {timer.formatted}
               </p>
@@ -613,7 +656,7 @@ const DiceBattle = () => {
             </div>
             <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
               <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+              {hasUnreadChat && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500" />}
             </motion.button>
           </div>
         </motion.div>
@@ -696,9 +739,10 @@ const DiceBattle = () => {
         </div>
       </div>
 
-      <TurnTimerCountdown deadline={turnDeadline} isMyTurn={!myDone} />
+      {/* Only show the turn timer after at least one player has rolled — prevents penalizing players for initial load delays */}
+      <TurnTimerCountdown remainingMs={rollCount > 0 || opponentRolls > 0 ? turnDeadline : null} isMyTurn={!myDone} />
 
-      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global", "room", "game"]} currentChannel="game" />
+      <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" socketRef={socketRef} gameType="DICE" matchId={currentMatch?.matchId} onUnreadMessagesChange={setHasUnreadChat} />
       <PlayerProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} playerName={profilePlayer} />
     </PageTransition>
   );

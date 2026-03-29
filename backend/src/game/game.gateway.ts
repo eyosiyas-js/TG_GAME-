@@ -42,9 +42,24 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private activeMatches: Map<string, string> = new Map();
   private pendingDisconnects: Map<string, NodeJS.Timeout> = new Map();
 
+  // Tracks when each turn timer was set (key = timerKey, value = { startedAt, totalMs })
+  // Used to compute remaining time when we need to pause/resume a timer.
+  private timerMeta: Map<string, { startedAt: number; totalMs: number }> = new Map();
+
+  // Stores remaining turn-timer time when a player disconnects (key = timerKey, value = remainingMs)
+  // Allows accurate timer resumption when the player reconnects.
+  private pausedTimers: Map<string, number> = new Map();
+
+  // Tracks which players (userIds) are currently disconnected per match (matchId → Set<userId>)
+  // Used to handle dual-disconnect scenarios: don't resume until ALL disconnected players return.
+  private disconnectedPlayers: Map<string, Set<string>> = new Map();
+
   // Room system
   private rooms: Map<string, GameRoom> = new Map();
   private userRooms: Map<string, string> = new Map(); // userId -> roomId
+
+  // Chat system
+  private chatMessages: Map<string, any[]> = new Map();
 
   constructor(
     private gameService: GameService,
@@ -83,6 +98,26 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  /**
+   * Sets a turn timer and records metadata (start time + total duration)
+   * so that handleDisconnect can compute how much time remains if it needs to pause.
+   */
+  private setTrackedTimer(key: string, callback: () => void, durationMs: number): void {
+    // Clear any old timer + metadata for this key
+    const existing = this.turnTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
+      this.turnTimers.delete(key);
+    }
+    this.timerMeta.set(key, { startedAt: Date.now(), totalMs: durationMs });
+    const t = setTimeout(() => {
+      this.turnTimers.delete(key);
+      this.timerMeta.delete(key);
+      callback();
+    }, durationMs);
+    this.turnTimers.set(key, t);
+  }
+
   async handleConnection(socket: Socket) {
     try {
       const auth = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
@@ -117,27 +152,26 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           }
 
           const participants = (match as any).participants || [];
-
-          // Notify opponents about reconnection
-          let activeParticipants = participants;
-          if ((match as any).gameType === 'BINGO') {
-            activeParticipants = this.getActiveBingoParticipants(matchId, participants);
-          }
-          activeParticipants.forEach((p: any) => {
-            if (p.userId !== userId) {
-              this.server.to(p.userId).emit('opponentReconnected', {
-                matchId,
-                opponentId: userId,
-              });
-            }
-          });
           const opponent = participants.find((pp: any) => pp.userId !== userId);
+
+          // Remove this player from the disconnected set for this match
+          const disconnected = this.disconnectedPlayers.get(matchId);
+          if (disconnected) {
+            disconnected.delete(userId);
+            if (disconnected.size === 0) this.disconnectedPlayers.delete(matchId);
+          }
+
+          // Check if there are OTHER players still disconnected (dual-disconnect scenario)
+          const stillDisconnected = this.disconnectedPlayers.get(matchId);
+          const hasPeersStillDisconnected = stillDisconnected && stillDisconnected.size > 0;
 
           // Build Bingo-specific state for the rejoin payload
           let bingoRejoinData: any = {};
           if ((match as any).gameType === 'BINGO') {
-            // Unpause the game
-            this.gameService.setBingoPaused(matchId, false);
+            if (!hasPeersStillDisconnected) {
+              // Only unpause Bingo if all players are back
+              this.gameService.setBingoPaused(matchId, false);
+            }
 
             const state = this.gameService.getBingoState(matchId);
             if (state) {
@@ -168,10 +202,19 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             }
           }
 
+          // Determine the disconnect remaining time for the still-absent peer (for the returning player's overlay)
+          let peerReconnectDeadlineMs: number | null = null;
+          if (hasPeersStillDisconnected) {
+            const disconnectTimeMs = await this.gameService.getDisconnectTimeMs();
+            peerReconnectDeadlineMs = Date.now() + disconnectTimeMs; // approximate; forfeit timer is already running
+          }
+
+          // Send the match state to the returning player
           socket.emit('rejoinedMatch', {
             matchId,
             gameType: (match as any).gameType,
             stake: Number((match as any).stake),
+            matchStartedAt: (match as any).createdAt ? new Date((match as any).createdAt).getTime() : Date.now(),
             opponentName: opponent?.user?.username || 'Opponent',
             opponentLevel: opponent?.user?.level || 1,
             allPlayers: participants.map((p: any) => ({
@@ -183,29 +226,85 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             ...bingoRejoinData,
           });
 
-          // Resume the turn timer for Bingo
-          if ((match as any).gameType === 'BINGO') {
-            const state = this.gameService.getBingoState(matchId);
-            if (state) {
-              const currentTurnUserId = state.turnOrder[state.currentTurnIndex];
-              const turnTimeMs = await this.gameService.getTurnTimeMs();
-              const deadline = Date.now() + turnTimeMs;
+          if (hasPeersStillDisconnected) {
+            // Dual-disconnect: the other player is still gone.
+            // Show the returning player the waiting/disconnected UI instead of resuming.
+            const absentUserId = [...stillDisconnected!][0];
+            const absentPlayer = participants.find((p: any) => p.userId === absentUserId);
+            socket.emit('opponentStillDisconnected', {
+              matchId,
+              opponentName: absentPlayer?.user?.username || 'Opponent',
+              reconnectDeadline: peerReconnectDeadlineMs,
+            });
+            // Do NOT resume timers — keep them frozen until the other player returns.
+            console.log(`[GATEWAY] User ${userId} rejoined but peer ${absentUserId} is still disconnected. Showing wait overlay.`);
+          } else {
+            // All players back — notify peers and resume timers.
+            let activeParticipants = participants;
+            if ((match as any).gameType === 'BINGO') {
+              activeParticipants = this.getActiveBingoParticipants(matchId, participants);
+            }
+            activeParticipants.forEach((p: any) => {
+              if (p.userId !== userId) {
+                this.server.to(p.userId).emit('opponentReconnected', { matchId, opponentId: userId });
+              }
+            });
 
-              // Set the new backend timer
-              const timerObj = setTimeout(async () => {
-                this.turnTimers.delete(matchId);
-                await this.broadcastBingoAutoCall(matchId, currentTurnUserId);
-              }, turnTimeMs);
-              this.turnTimers.set(matchId, timerObj);
+            // Resume the turn timers — restore exact remaining time from before the disconnect
+            if ((match as any).gameType === 'BINGO') {
+              const state = this.gameService.getBingoState(matchId);
+              if (state) {
+                const currentTurnUserId = state.turnOrder[state.currentTurnIndex];
+                const pausedKey = matchId;
+                const remainingMs = this.pausedTimers.get(pausedKey) ?? await this.gameService.getTurnTimeMs();
+                this.pausedTimers.delete(pausedKey);
 
-              // Broadcast the resumed timer to all participants
-              participants.forEach((p: any) => {
-                this.server.to(p.userId).emit('startTurnTimer', {
-                  matchId, deadline, turnTimeMs,
-                  currentTurn: currentTurnUserId,
-                  isYourTurn: p.userId === currentTurnUserId,
+                this.setTrackedTimer(matchId, async () => {
+                  await this.broadcastBingoAutoCall(matchId, currentTurnUserId);
+                }, remainingMs);
+
+                participants.forEach((p: any) => {
+                  this.server.to(p.userId).emit('startTurnTimer', {
+                    matchId, remainingMs,
+                    currentTurn: currentTurnUserId,
+                    isYourTurn: p.userId === currentTurnUserId,
+                  });
                 });
-              });
+              }
+            } else if ((match as any).gameType === 'DICE') {
+              const state = this.gameService.getDiceState(matchId);
+              if (state) {
+                const fullTurnTimeMs = await this.gameService.getTurnTimeMs();
+                participants.forEach((p: any) => {
+                  const isDone = p.userId === state.p1 ? state.p1Done : state.p2Done;
+                  if (isDone) return;
+                  const timerKey = `${matchId}_${p.userId}`;
+                  const remainingMs = this.pausedTimers.get(timerKey) ?? fullTurnTimeMs;
+                  this.pausedTimers.delete(timerKey);
+
+                  this.setTrackedTimer(timerKey, async () => {
+                    const forfeitResult = await this.gameService.forfeitMatch(matchId, p.userId);
+                    if (forfeitResult) {
+                      const parts = (forfeitResult as any).participants || [];
+                      parts.forEach((pp: any) => {
+                        const opp = parts.find((x: any) => x.userId !== pp.userId);
+                        const isWinner = pp.userId !== p.userId;
+                        this.server.to(pp.userId).emit('matchUpdate', {
+                          matchId, status: 'FINISHED', result: isWinner ? 'win' : 'lose',
+                          winnerId: isWinner ? pp.userId : opp?.userId,
+                          opponentName: opp?.user?.username || 'Opponent',
+                          stake: Number((forfeitResult as any).stake),
+                          winAmount: (forfeitResult as any).winAmount, commission: (forfeitResult as any).commission,
+                          reason: isWinner ? 'opponent_timeout' : 'timeout',
+                        });
+                        this.activeMatches.delete(pp.userId);
+                      });
+                    }
+                  }, remainingMs);
+
+                  this.server.to(p.userId).emit('startTurnTimer', { matchId, remainingMs });
+                });
+              }
             }
           }
         }
@@ -300,6 +399,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         matchId,
         gameType: (match as any).gameType,
         stake: Number((match as any).stake),
+        // Provide match start time so the frontend can restore the elapsed match timer
+        matchStartedAt: (match as any).createdAt ? new Date((match as any).createdAt).getTime() : Date.now(),
         opponentName: opponent?.user?.username || 'Opponent',
         opponentLevel: opponent?.user?.level || 1,
         allPlayers: participants.map((p: any) => ({
@@ -311,24 +412,46 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ...bingoRejoinData,
       });
 
-      // If Bingo, unpause the game and start the turn timer
+      // Remove this player from the disconnected set (they manually requested rejoin via banner)
+      const disconnectedSet = this.disconnectedPlayers.get(matchId);
+      if (disconnectedSet) {
+        disconnectedSet.delete(userId);
+        if (disconnectedSet.size === 0) this.disconnectedPlayers.delete(matchId);
+      }
+
+      // Check for dual-disconnect: any other participants still offline?
+      const stillDisconnected = this.disconnectedPlayers.get(matchId);
+      const hasPeersStillDisconnected = stillDisconnected && stillDisconnected.size > 0;
+
+      if (hasPeersStillDisconnected) {
+        // The other player is also missing — show wait overlay, don't resume timers.
+        const absentUserId = [...stillDisconnected!][0];
+        const absentPlayer = participants.find((p: any) => p.userId === absentUserId);
+        const disconnectTimeMs = await this.gameService.getDisconnectTimeMs();
+        socket.emit('opponentStillDisconnected', {
+          matchId,
+          opponentName: absentPlayer?.user?.username || 'Opponent',
+          reconnectDeadline: Date.now() + disconnectTimeMs, // approximate
+        });
+        // Do NOT resume timers.
+      } else {
+      // If Bingo, unpause the game and start the turn timer (resume from paused if available)
       if ((match as any).gameType === 'BINGO') {
         this.gameService.setBingoPaused(matchId, false);
         const state = this.gameService.getBingoState(matchId);
         if (state && !this.turnTimers.has(matchId)) {
           const currentTurnUserId = state.turnOrder[state.currentTurnIndex];
-          const turnTimeMs = await this.gameService.getTurnTimeMs();
-          const deadline = Date.now() + turnTimeMs;
+          // Restore paused timer remaining time, or use a fresh full duration
+          const remainingMs = this.pausedTimers.get(matchId) ?? await this.gameService.getTurnTimeMs();
+          this.pausedTimers.delete(matchId);
 
-          const timerObj = setTimeout(async () => {
-            this.turnTimers.delete(matchId);
+          this.setTrackedTimer(matchId, async () => {
             await this.broadcastBingoAutoCall(matchId, currentTurnUserId);
-          }, turnTimeMs);
-          this.turnTimers.set(matchId, timerObj);
+          }, remainingMs);
 
           participants.forEach((p: any) => {
             this.server.to(p.userId).emit('startTurnTimer', {
-              matchId, deadline, turnTimeMs,
+              matchId, remainingMs,
               currentTurn: currentTurnUserId,
               isYourTurn: p.userId === currentTurnUserId,
             });
@@ -337,17 +460,19 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } else if ((match as any).gameType === 'DICE') {
         const state = this.gameService.getDiceState(matchId);
         if (state) {
-          const turnTimeMs = await this.gameService.getTurnTimeMs();
-          const deadline = Date.now() + turnTimeMs;
+          const fullTurnTimeMs = await this.gameService.getTurnTimeMs();
 
           participants.forEach((p: any) => {
             const isDone = p.userId === state.p1 ? state.p1Done : state.p2Done;
             const timerKey = `${matchId}_${p.userId}`;
-            
+
             if (!isDone && !this.turnTimers.has(timerKey)) {
-              this.server.to(p.userId).emit('startTurnTimer', { matchId, deadline, turnTimeMs });
-              const newTimer = setTimeout(async () => {
-                this.turnTimers.delete(timerKey);
+              // Restore from paused time, or use fresh full duration
+              const remainingMs = this.pausedTimers.get(timerKey) ?? fullTurnTimeMs;
+              this.pausedTimers.delete(timerKey);
+
+              this.server.to(p.userId).emit('startTurnTimer', { matchId, remainingMs });
+              this.setTrackedTimer(timerKey, async () => {
                 const forfeitResult = await this.gameService.forfeitMatch(matchId, p.userId);
                 if (forfeitResult) {
                   const parts = (forfeitResult as any).participants || [];
@@ -359,17 +484,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
                       winnerId: isWinner ? pp.userId : opponentUrl?.userId,
                       opponentName: opponentUrl?.user?.username || 'Opponent',
                       stake: Number((forfeitResult as any).stake),
+                      winAmount: (forfeitResult as any).winAmount, commission: (forfeitResult as any).commission,
                       reason: isWinner ? 'opponent_timeout' : 'timeout',
                     });
                     this.activeMatches.delete(pp.userId);
                   });
                 }
-              }, turnTimeMs);
-              this.turnTimers.set(timerKey, newTimer);
+              }, remainingMs);
             }
           });
         }
       }
+      } // end else (no peers still disconnected)
     } catch (e: any) {
       socket.emit('error', { message: e.message || 'Failed to rejoin' });
     }
@@ -420,22 +546,39 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       
       const disconnectTimeMs = await this.gameService.getDisconnectTimeMs();
-      
-      activeParticipants.forEach((p: any) => {
-        if (p.userId !== userId) {
-          this.server.to(p.userId).emit('opponentDisconnected', {
-            matchId,
-            opponentName: disconnectedPlayer?.user?.username || 'Opponent',
-            reconnectDeadline: Date.now() + disconnectTimeMs,
-          });
-        }
-      });
 
-      // Pause the active turn timer so no one forfeits due to timeout
+      // ✅ TWO-TAB FORFEIT FIX: Only start the disconnect timer if this was the user's LAST active socket.
+      // Without this, closing a second tab would forfeit the match still open in the first tab.
+      const socketsInRoom = await this.server.in(userId).fetchSockets();
+      if (socketsInRoom.length > 0) {
+        // User still has at least one other connected socket — do NOT start the forfeit timer
+        console.log(`[GATEWAY] User ${userId} disconnected from one tab but still has ${socketsInRoom.length} active socket(s). Ignoring disconnect.`);
+        return;
+      }
+      
+      // Track this player as disconnected for their match
+      if (!this.disconnectedPlayers.has(matchId)) {
+        this.disconnectedPlayers.set(matchId, new Set());
+      }
+      this.disconnectedPlayers.get(matchId)!.add(userId);
+
+      // Pause (freeze) ALL active turn timers for this match and compute remaining time.
+      let frozenRemainingMs: number | null = null;
       for (const [key, tObj] of this.turnTimers.entries()) {
         if (key === matchId || key.startsWith(`${matchId}_`)) {
           clearTimeout(tObj);
           this.turnTimers.delete(key);
+          const meta = this.timerMeta.get(key);
+          if (meta) {
+            const elapsed = Date.now() - meta.startedAt;
+            const remaining = Math.max(0, meta.totalMs - elapsed);
+            this.pausedTimers.set(key, remaining);
+            this.timerMeta.delete(key);
+            // Keep the smallest remaining time to broadcast as the frozen display value
+            if (frozenRemainingMs === null || remaining < frozenRemainingMs) {
+              frozenRemainingMs = remaining;
+            }
+          }
         }
       }
 
@@ -444,8 +587,36 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.gameService.setBingoPaused(matchId, true);
       }
 
+      // Emit 'timerFrozen' to ALL participants (including both still-connected peers).
+      // This lets every client freeze its turn-timer display immediately.
+      activeParticipants.forEach((p: any) => {
+        this.server.to(p.userId).emit('timerFrozen', {
+          matchId,
+          remainingMs: frozenRemainingMs,
+        });
+      });
+
+      // Notify other connected players that the opponent disconnected.
+      // Only emit to players who are NOT also currently disconnected.
+      const alreadyDisconnected = this.disconnectedPlayers.get(matchId) || new Set();
+      activeParticipants.forEach((p: any) => {
+        if (p.userId !== userId && !alreadyDisconnected.has(p.userId)) {
+          this.server.to(p.userId).emit('opponentDisconnected', {
+            matchId,
+            opponentName: disconnectedPlayer?.user?.username || 'Opponent',
+            reconnectDeadline: Date.now() + disconnectTimeMs,
+          });
+        }
+      });
+
       const timer = setTimeout(async () => {
         this.pendingDisconnects.delete(userId);
+        // Also clean up disconnectedPlayers entry for this user
+        const dcSet = this.disconnectedPlayers.get(matchId);
+        if (dcSet) {
+          dcSet.delete(userId);
+          if (dcSet.size === 0) this.disconnectedPlayers.delete(matchId);
+        }
         try {
           const currentMatch = await this.gameService.getMatchById(matchId);
           if (!currentMatch || (currentMatch as any).status === 'FINISHED') {
@@ -494,18 +665,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
               const nextTurnUserId = state.turnOrder[state.currentTurnIndex];
               const turnTimeMs = await this.gameService.getTurnTimeMs();
-              const deadline = Date.now() + turnTimeMs;
 
-              const timerObj = setTimeout(async () => {
-                this.turnTimers.delete(matchId);
+              // Clear any stale paused timer entry (player timed out, fresh timer for remaining)
+              this.pausedTimers.delete(matchId);
+
+              this.setTrackedTimer(matchId, async () => {
                 await this.broadcastBingoAutoCall(matchId, nextTurnUserId);
               }, turnTimeMs);
-              this.turnTimers.set(matchId, timerObj);
 
               parts.forEach((p: any) => {
                 if (!forfeitedList.includes(p.userId)) {
                   this.server.to(p.userId).emit('startTurnTimer', {
-                    matchId, deadline, turnTimeMs,
+                    matchId, remainingMs: turnTimeMs,
                     currentTurn: nextTurnUserId,
                     isYourTurn: p.userId === nextTurnUserId,
                   });
@@ -526,6 +697,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
                   winnerId: winnerId || p.userId,
                   opponentName: parts.find((pp: any) => pp.userId === userId)?.user?.username || 'Opponent',
                   stake: Number((result as any).stake),
+                  winAmount: (result as any).winAmount, commission: (result as any).commission,
                   reason: 'opponent_timeout',
                 });
                 this.activeMatches.delete(p.userId);
@@ -547,12 +719,23 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // ========================
 
   @SubscribeMessage('createRoom')
-  handleCreateRoom(
+  async handleCreateRoom(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { gameType: GameType; stake: number; maxPlayers: number; name: string; isPublic: boolean },
   ) {
     const userId = socket.data.user.userId;
     const username = socket.data.user.username;
+
+    // Guard: maintenance mode
+    if (await this.gameService.isMaintenanceMode()) {
+      socket.emit('roomError', { message: 'Platform is in maintenance mode. No new rooms can be created.' });
+      return;
+    }
+    // Guard: game enabled
+    if (!(await this.gameService.isGameEnabled(data.gameType))) {
+      socket.emit('roomError', { message: 'This game is currently disabled.' });
+      return;
+    }
 
     // Can't be in two rooms at once
     if (this.userRooms.has(userId)) {
@@ -764,7 +947,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Emit the initial turn timer for the first player
     const turnTimeMs = await this.gameService.getTurnTimeMs();
-    const deadline = Date.now() + turnTimeMs;
     const timer = setTimeout(async () => {
       this.turnTimers.delete(matchId);
       console.log(`[BINGO] Turn timer expired for ${firstTurn} in match ${matchId}`);
@@ -776,8 +958,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const isYourTurn = p.userId === firstTurn;
       this.server.to(p.userId).emit('startTurnTimer', {
         matchId,
-        deadline,
-        turnTimeMs,
+        remainingMs: turnTimeMs,
         currentTurn: firstTurn,
         isYourTurn,
       });
@@ -808,6 +989,17 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       let match: any;
+
+      // Guard: maintenance mode
+      if (await this.gameService.isMaintenanceMode()) {
+        socket.emit('roomError', { message: 'Platform is in maintenance mode. No new matches can be started.' });
+        return;
+      }
+      // Guard: game enabled
+      if (!(await this.gameService.isGameEnabled(room.gameType))) {
+        socket.emit('roomError', { message: 'This game is currently disabled.' });
+        return;
+      }
 
       if (room.gameType === 'BINGO') {
         // Multi-player Bingo match
@@ -856,6 +1048,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (match.gameType === 'BINGO') {
         await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
       } else if (match.gameType === 'DICE') {
+        // Timers only begin once a player rolls — see handleMatchMove
         this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
       }
     } catch (e: any) {
@@ -882,6 +1075,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = socket.data.user.userId;
+
+      // Guard: maintenance mode
+      if (await this.gameService.isMaintenanceMode()) {
+        socket.emit('error', { message: 'Platform is in maintenance mode. No new matches can be started.' });
+        return;
+      }
+      // Guard: game enabled
+      if (!(await this.gameService.isGameEnabled(data.gameType))) {
+        socket.emit('error', { message: 'This game is currently disabled.' });
+        return;
+      }
+
       const result = await this.gameService.joinQueue(userId, data.gameType, data.stake);
 
       if (!result) {
@@ -974,19 +1179,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (match.gameType === 'BINGO') {
         await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
       } else if (match.gameType === 'DICE') {
+        // ✅ DICE TIMER FIX: Do NOT start timers here at match creation.
+        // Timers only begin once the first player actually rolls the dice.
         this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
-        // Start timers for both players - they roll independently
-        const turnTimeMs = await this.gameService.getTurnTimeMs();
-        const deadline = Date.now() + turnTimeMs;
-        participants.forEach((p: any) => {
-          this.server.to(p.userId).emit('startTurnTimer', { matchId: match.id, deadline, turnTimeMs });
-          const timer = setTimeout(async () => {
-             this.turnTimers.delete(`${match.id}_${p.userId}`);
-             await this.gameService.forfeitMatch(match.id, p.userId);
-             // Broadcast forfeit logic...
-          }, turnTimeMs);
-          this.turnTimers.set(`${match.id}_${p.userId}`, timer);
-        });
       }
     } catch (e: any) {
       socket.emit('error', { message: e.message });
@@ -1065,7 +1260,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
             const nextTurnUserId = state.turnOrder[state.currentTurnIndex];
             const turnTimeMs = await this.gameService.getTurnTimeMs();
-            const deadline = Date.now() + turnTimeMs;
 
             const timerObj = setTimeout(async () => {
               this.turnTimers.delete(data.matchId);
@@ -1076,7 +1270,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             parts.forEach((p: any) => {
               if (!forfeitedList.includes(p.userId)) {
                 this.server.to(p.userId).emit('startTurnTimer', {
-                  matchId: data.matchId, deadline, turnTimeMs,
+                  matchId: data.matchId, remainingMs: turnTimeMs,
                   currentTurn: nextTurnUserId,
                   isYourTurn: p.userId === nextTurnUserId,
                 });
@@ -1111,7 +1305,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
               yourMove: null, opponentMove: null,
               opponentName: meP?.user?.username || 'Opponent',
               winnerId: p.userId,
-              stake: Number((result as any).stake), reason: 'opponent_forfeit',
+              stake: Number((result as any).stake), winAmount: (result as any).winAmount, commission: (result as any).commission, reason: 'opponent_forfeit',
             });
             this.activeMatches.delete(p.userId);
           }
@@ -1170,6 +1364,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
               winnerId: autoCallResult.winnerId,
               opponentName: opponent?.user?.username || 'Opponent',
               stake: Number((finalMatch as any).stake),
+              winAmount: (finalMatch as any).winAmount, commission: (finalMatch as any).commission,
               playerLines: autoCallResult.playerLines,
             });
             this.activeMatches.delete(p.userId);
@@ -1193,7 +1388,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Start timer for the NEXT player
         const turnTimeMs = await this.gameService.getTurnTimeMs();
-        const deadline = Date.now() + turnTimeMs;
         const nextTimer = setTimeout(async () => {
           this.turnTimers.delete(matchId);
           await this.broadcastBingoAutoCall(matchId, autoCallResult.nextTurnUserId!);
@@ -1204,8 +1398,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           const isYourTurn = p.userId === autoCallResult.nextTurnUserId;
           this.server.to(p.userId).emit('startTurnTimer', {
             matchId,
-            deadline,
-            turnTimeMs,
+            remainingMs: turnTimeMs,
             currentTurn: autoCallResult.nextTurnUserId,
             isYourTurn,
           });
@@ -1275,6 +1468,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
               winnerId: result.winnerId,
               opponentName: opponent?.user?.username || 'Opponent',
               stake: Number((finalMatch as any).stake),
+              winAmount: (finalMatch as any).winAmount, commission: (finalMatch as any).commission,
               playerLines: result.playerLines,
             });
             this.activeMatches.delete(p.userId);
@@ -1298,7 +1492,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Start turn timer for next player
         const turnTimeMs = await this.gameService.getTurnTimeMs();
-        const deadline = Date.now() + turnTimeMs;
         const timer = setTimeout(async () => {
           this.turnTimers.delete(data.matchId);
           await this.broadcastBingoAutoCall(data.matchId, result.nextTurnUserId!);
@@ -1310,8 +1503,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           const isYourTurn = p.userId === result.nextTurnUserId;
           this.server.to(p.userId).emit('startTurnTimer', {
             matchId: data.matchId,
-            deadline,
-            turnTimeMs,
+            remainingMs: turnTimeMs,
             currentTurn: result.nextTurnUserId,
             isYourTurn,
           });
@@ -1360,7 +1552,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           }
 
           const turnTimeMs = await this.gameService.getTurnTimeMs();
-          const deadline = Date.now() + turnTimeMs;
 
           participants.forEach((p: any) => {
             const pUpdate = {
@@ -1379,7 +1570,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             const isMe = p.userId === userId;
             const myDone = p.userId === state.p1 ? state.p1Done : state.p2Done;
             if (isMe && !myDone) {
-              this.server.to(p.userId).emit('startTurnTimer', { matchId: data.matchId, deadline, turnTimeMs });
+              this.server.to(p.userId).emit('startTurnTimer', { matchId: data.matchId, remainingMs: turnTimeMs });
               const newTimer = setTimeout(async () => {
                 this.turnTimers.delete(timerKey);
                 const forfeitResult = await this.gameService.forfeitMatch(data.matchId, userId);
@@ -1395,6 +1586,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
                       winnerId: isWinner ? pp.userId : opponentUrl?.userId,
                       opponentName: opponentUrl?.user?.username || 'Opponent',
                       stake: Number((forfeitResult as any).stake),
+                      winAmount: (forfeitResult as any).winAmount, commission: (forfeitResult as any).commission,
                       reason: isWinner ? 'opponent_timeout' : 'timeout',
                     });
                     this.activeMatches.delete(pp.userId);
@@ -1432,7 +1624,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             matchId: data.matchId, status: 'FINISHED', result: playerResult,
             yourMove: myMove?.move || null, opponentMove: opMove?.move || null,
             opponentName: opponent?.user?.username || 'Opponent',
-            winnerId, stake,
+            winnerId, stake, winAmount: (result as any).winAmount, commission: (result as any).commission,
           });
           this.activeMatches.delete(p.userId);
         });
@@ -1442,7 +1634,6 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // START TIMER
         const turnTimeMs = await this.gameService.getTurnTimeMs();
-        const deadline = Date.now() + turnTimeMs;
         const timerObj = setTimeout(async () => {
           this.turnTimers.delete(data.matchId);
           try {
@@ -1461,6 +1652,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
                     opponentName: opponentP?.user?.username || 'Opponent',
                     winnerId: p.userId === slowPlayer.userId ? opponentP?.userId : p.userId,
                     stake: Number((forfeitResult as any).stake),
+                    winAmount: (forfeitResult as any).winAmount, commission: (forfeitResult as any).commission,
                     reason: 'opponent_timeout',
                   });
                   this.activeMatches.delete(p.userId);
@@ -1475,7 +1667,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           if (p.userId !== userId) {
             this.server.to(p.userId).emit('opponentMoved', { matchId: data.matchId });
           }
-          this.server.to(p.userId).emit('startTurnTimer', { matchId: data.matchId, deadline, turnTimeMs });
+          this.server.to(p.userId).emit('startTurnTimer', { matchId: data.matchId, remainingMs: turnTimeMs });
         });
       }
     } catch (e: any) {
@@ -1483,8 +1675,61 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage('message')
-  handleMessage(client: any, payload: any): string {
-    return 'Hello world!';
+  // ========================
+  //    CHAT SYSTEM
+  // ========================
+
+  @SubscribeMessage('joinChat')
+  handleJoinChat(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { channel: string },
+  ) {
+    const roomName = `chat:${data.channel}`;
+    socket.join(roomName);
+
+    // Send recent history
+    const history = this.chatMessages.get(data.channel) || [];
+    socket.emit('chatHistory', { channel: data.channel, messages: history });
+  }
+
+  @SubscribeMessage('leaveChat')
+  handleLeaveChat(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { channel: string },
+  ) {
+    const roomName = `chat:${data.channel}`;
+    socket.leave(roomName);
+  }
+
+  @SubscribeMessage('chatMessage')
+  handleChatMessage(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { channel: string; text: string },
+  ) {
+    const user = socket.data?.user;
+    if (!user || !data.text?.trim() || !data.channel) return;
+
+    const message = {
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      sender: user.username,
+      text: data.text.trim(),
+      timestamp: new Date(),
+      channel: data.channel.split(':')[0], // Extract channel type (e.g. "global" from "global:BINGO")
+    };
+
+    // Store in memory
+    if (!this.chatMessages.has(data.channel)) {
+      this.chatMessages.set(data.channel, []);
+    }
+    const messages = this.chatMessages.get(data.channel)!;
+    messages.push(message);
+
+    // Limit to 100 max
+    if (messages.length > 100) {
+      messages.shift();
+    }
+
+    // Broadcast to everyone in that specific chat room
+    this.server.to(`chat:${data.channel}`).emit('chatMessage', { channel: data.channel, message });
   }
 }

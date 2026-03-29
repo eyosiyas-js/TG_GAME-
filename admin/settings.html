@@ -5,17 +5,40 @@
     <title>Admin Dashboard - Settings</title>
     <style>
         body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
-        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
-        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.1rem; }
         .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
-        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; max-width: 600px; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; max-width: 700px; }
+        .card h2 { margin-top: 0; color: #e2e8f0; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
         .form-group { margin-bottom: 1.5rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; color: #94a3b8; font-weight: 500; }
         .form-group input { width: 100%; padding: 0.75rem; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
         .form-group .help-text { display: block; margin-top: 0.25rem; font-size: 0.8rem; color: #64748b; }
         button { background: #38bdf8; color: #0f172a; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: bold; }
         button:hover { background: #0ea5e9; }
-        #toast { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: white; padding: 1rem; border-radius: 4px; display: none; }
+        #toast { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: white; padding: 1rem; border-radius: 4px; display: none; z-index: 100; }
+
+        /* Toggle switch */
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid #1e293b; }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-label { font-weight: 500; color: #e2e8f0; }
+        .toggle-sub { font-size: 0.8rem; color: #64748b; }
+        .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; border-radius: 26px; transition: 0.3s; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; }
+        input:checked + .slider { background-color: #22c55e; }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        /* Maintenance banner */
+        .maintenance-banner { background: #f59e0b22; border: 1px solid #f59e0b55; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; }
+        .maintenance-banner.active { background: #ef444422; border-color: #ef444455; }
+        .maintenance-count { font-size: 2rem; font-weight: bold; color: #f59e0b; }
+
+        .commission-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .commission-item { display: flex; align-items: center; gap: 0.5rem; }
+        .commission-item input { width: 80px; text-align: center; }
+        .commission-item span { color: #94a3b8; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -24,11 +47,85 @@
         <a href="users.html">Users</a>
         <a href="index.html">Historical Matches</a>
         <a href="active-games.html">Active Games</a>
+        <a href="revenue.html">Revenue</a>
         <a href="settings.html" class="active">Settings</a>
+        <a href="notifications.html">Notifications</a>
     </div>
 
+    <!-- Maintenance Mode -->
     <div class="card">
-        <h2>Game Management Settings</h2>
+        <h2>⚙️ Maintenance / Update Mode</h2>
+        <div class="maintenance-banner" id="maintenance-banner">
+            <div>
+                <div class="toggle-row" style="border: none; padding: 0;">
+                    <div>
+                        <div class="toggle-label">Enable Maintenance Mode</div>
+                        <div class="toggle-sub">Blocks all new matches. Active matches continue until completion.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="maintenance-toggle" onchange="toggleMaintenance()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="maintenance-info" style="margin-top: 0.75rem; font-size: 0.85rem; color: #94a3b8;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Enable/Disable -->
+    <div class="card">
+        <h2>🎮 Game Enable / Disable</h2>
+        <p style="font-size: 0.85rem; color: #64748b; margin-top: 0;">Disabling a game prevents new matches. Ongoing matches are not affected.</p>
+        <div class="toggle-row">
+            <div><div class="toggle-label">🎱 Bingo</div></div>
+            <label class="switch"><input type="checkbox" id="game-BINGO" onchange="toggleGame('BINGO')"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+            <div><div class="toggle-label">✊ Rock Paper Scissors</div></div>
+            <label class="switch"><input type="checkbox" id="game-RPS" onchange="toggleGame('RPS')"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+            <div><div class="toggle-label">🎲 Dice Battle</div></div>
+            <label class="switch"><input type="checkbox" id="game-DICE" onchange="toggleGame('DICE')"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+            <div><div class="toggle-label">🔢 Guess My Number</div></div>
+            <label class="switch"><input type="checkbox" id="game-GUESS" onchange="toggleGame('GUESS')"><span class="slider"></span></label>
+        </div>
+    </div>
+
+    <!-- Commission Settings -->
+    <div class="card">
+        <h2>💰 Commission Rates</h2>
+        <p style="font-size: 0.85rem; color: #64748b; margin-top: 0;">Percentage deducted from the winner's prize pool. Default: 10%</p>
+        <div class="commission-grid">
+            <div class="commission-item">
+                <span>🎱 Bingo:</span>
+                <input type="number" id="commission-BINGO" min="0" max="50" step="1">
+                <span>%</span>
+            </div>
+            <div class="commission-item">
+                <span>✊ RPS:</span>
+                <input type="number" id="commission-RPS" min="0" max="50" step="1">
+                <span>%</span>
+            </div>
+            <div class="commission-item">
+                <span>🎲 Dice:</span>
+                <input type="number" id="commission-DICE" min="0" max="50" step="1">
+                <span>%</span>
+            </div>
+            <div class="commission-item">
+                <span>🔢 Guess:</span>
+                <input type="number" id="commission-GUESS" min="0" max="50" step="1">
+                <span>%</span>
+            </div>
+        </div>
+        <button onclick="saveCommissions()" style="margin-top: 1rem;">Save Commission Rates</button>
+    </div>
+
+    <!-- Game Settings -->
+    <div class="card">
+        <h2>🎯 Game Management Settings</h2>
         <div class="form-group">
             <label>Disconnection Timeout (ms)</label>
             <input type="number" id="setting-disconnect" placeholder="e.g. 60000">
@@ -44,46 +141,127 @@
             <input type="number" id="setting-bingo" placeholder="e.g. 4">
             <span class="help-text">Number of players required to start a quick match automatically (default 4).</span>
         </div>
-        
-        <button onclick="saveSettings()">Save Changes</button>
+        <button onclick="saveGameSettings()">Save Game Settings</button>
     </div>
 
     <div id="toast">Settings updated successfully!</div>
 
     <script>
+        const API = 'http://localhost:3005';
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg || 'Settings updated successfully!';
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
         async function loadSettings() {
             try {
-                const res = await fetch('http://localhost:3005/admin/settings');
+                const res = await fetch(`${API}/admin/settings`);
                 const settings = await res.json();
+
+                // Game settings
                 document.getElementById('setting-disconnect').value = settings.DISCONNECT_TIMEOUT || 60000;
                 document.getElementById('setting-turn').value = settings.TURN_TIMER || 15000;
                 document.getElementById('setting-bingo').value = settings.BINGO_QUICK_PLAYERS || 4;
+
+                // Commission rates
+                document.getElementById('commission-BINGO').value = settings.COMMISSION_BINGO || 10;
+                document.getElementById('commission-RPS').value = settings.COMMISSION_RPS || 10;
+                document.getElementById('commission-DICE').value = settings.COMMISSION_DICE || 10;
+                document.getElementById('commission-GUESS').value = settings.COMMISSION_GUESS || 10;
+
+                // Game toggles
+                document.getElementById('game-BINGO').checked = settings.GAME_ENABLED_BINGO !== 'false';
+                document.getElementById('game-RPS').checked = settings.GAME_ENABLED_RPS !== 'false';
+                document.getElementById('game-DICE').checked = settings.GAME_ENABLED_DICE !== 'false';
+                document.getElementById('game-GUESS').checked = settings.GAME_ENABLED_GUESS !== 'false';
+
+                // Maintenance mode
+                document.getElementById('maintenance-toggle').checked = settings.MAINTENANCE_MODE === 'true';
+                updateMaintenanceBanner(settings.MAINTENANCE_MODE === 'true');
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function saveSettings() {
+        async function loadMaintenanceStatus() {
+            try {
+                const res = await fetch(`${API}/admin/maintenance`);
+                const data = await res.json();
+                const infoEl = document.getElementById('maintenance-info');
+                if (data.maintenanceMode) {
+                    infoEl.innerHTML = `<strong style="color: #ef4444;">ACTIVE</strong> — ${data.activeMatchCount} match(es) still running.`;
+                } else {
+                    infoEl.innerHTML = `Status: <strong style="color: #22c55e;">Normal</strong>`;
+                }
+            } catch (e) {}
+        }
+
+        function updateMaintenanceBanner(active) {
+            const banner = document.getElementById('maintenance-banner');
+            if (active) {
+                banner.classList.add('active');
+            } else {
+                banner.classList.remove('active');
+            }
+        }
+
+        async function toggleMaintenance() {
+            const checked = document.getElementById('maintenance-toggle').checked;
+            await fetch(`${API}/admin/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'MAINTENANCE_MODE', value: String(checked) })
+            });
+            updateMaintenanceBanner(checked);
+            loadMaintenanceStatus();
+            showToast(checked ? 'Maintenance mode ENABLED' : 'Maintenance mode DISABLED');
+        }
+
+        async function toggleGame(gameType) {
+            const checked = document.getElementById(`game-${gameType}`).checked;
+            await fetch(`${API}/admin/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: `GAME_ENABLED_${gameType}`, value: String(checked) })
+            });
+            showToast(`${gameType} ${checked ? 'enabled' : 'disabled'}`);
+        }
+
+        async function saveCommissions() {
+            const games = ['BINGO', 'RPS', 'DICE', 'GUESS'];
+            for (const g of games) {
+                const val = document.getElementById(`commission-${g}`).value;
+                await fetch(`${API}/admin/settings`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: `COMMISSION_${g}`, value: val })
+                });
+            }
+            showToast('Commission rates updated!');
+        }
+
+        async function saveGameSettings() {
             const updates = [
                 { key: 'DISCONNECT_TIMEOUT', value: document.getElementById('setting-disconnect').value },
                 { key: 'TURN_TIMER', value: document.getElementById('setting-turn').value },
                 { key: 'BINGO_QUICK_PLAYERS', value: document.getElementById('setting-bingo').value },
             ];
-
-            for(const item of updates) {
-                await fetch('http://localhost:3005/admin/settings', {
+            for (const item of updates) {
+                await fetch(`${API}/admin/settings`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item)
                 });
             }
-
-            const toast = document.getElementById('toast');
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 3000);
+            showToast('Game settings updated!');
         }
 
         loadSettings();
+        loadMaintenanceStatus();
+        setInterval(loadMaintenanceStatus, 5000);
     </script>
 </body>
 </html>

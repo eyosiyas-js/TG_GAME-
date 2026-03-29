@@ -55,4 +55,27 @@ export const api = {
     
     return response.json();
   },
+
+  async put(endpoint: string, body: any, token?: string) {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error('Something went wrong');
+    return response.json();
+  },
+
+  async delete(endpoint: string, token?: string) {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) throw new Error('Something went wrong');
+    return response.json();
+  }
 };

@@ -23,9 +23,8 @@ const Leaderboard = () => {
     queryKey: ["leaderboard"],
     queryFn: async () => {
       const res = await api.get("/auth/leaderboard");
-      const userId = localStorage.getItem("userId");
       // Map 'isYou' based on local storage
-      return res.data.map((entry: any) => ({
+      return res.map((entry: any) => ({
         ...entry,
         isYou: entry.name === localStorage.getItem("username")
       }));

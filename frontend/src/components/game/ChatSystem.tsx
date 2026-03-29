@@ -13,16 +13,6 @@ interface ChatMessage {
   isSystem?: boolean;
 }
 
-const MOCK_MESSAGES: ChatMessage[] = [
-  { id: "1", sender: "Player_42", text: "Anyone up for Bingo?", timestamp: new Date(Date.now() - 120000), channel: "global" },
-  { id: "2", sender: "Lucky_13", text: "GG last round 🔥", timestamp: new Date(Date.now() - 90000), channel: "global" },
-  { id: "3", sender: "DiceKing", text: "Looking for Dice Battle partners", timestamp: new Date(Date.now() - 45000), channel: "global" },
-  { id: "4", sender: "System", text: "ProGamer joined the room", timestamp: new Date(Date.now() - 30000), channel: "room", isSystem: true },
-  { id: "5", sender: "RollMaster", text: "Ready when you are!", timestamp: new Date(Date.now() - 20000), channel: "room" },
-  { id: "6", sender: "System", text: "Game started!", timestamp: new Date(Date.now() - 10000), channel: "game", isSystem: true },
-  { id: "7", sender: "Bot_1", text: "Nice roll! 🎲", timestamp: new Date(Date.now() - 5000), channel: "game" },
-];
-
 const channelConfig = {
   global: { icon: Hash, label: "Global Lobby", color: "text-primary" },
   room: { icon: Users, label: "Room Chat", color: "text-secondary" },
@@ -34,20 +24,109 @@ interface ChatSystemProps {
   onClose: () => void;
   availableChannels?: ChatChannel[];
   currentChannel?: ChatChannel;
+  socketRef?: React.MutableRefObject<any>;
+  gameType?: string;
+  roomId?: string;
+  matchId?: string;
+  onUnreadMessagesChange?: (hasUnread: boolean) => void;
 }
 
-const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentChannel: initialChannel }: ChatSystemProps) => {
+const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentChannel: initialChannel, socketRef, gameType, roomId, matchId, onUnreadMessagesChange }: ChatSystemProps) => {
   const [channel, setChannel] = useState<ChatChannel>(initialChannel || availableChannels[0]);
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isOpenRef = useRef(isOpen);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    if (isOpen) {
+      onUnreadMessagesChange?.(false);
+    }
+  }, [isOpen, onUnreadMessagesChange]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen]);
+
+  // Read current user
+  let myUsername = "You";
+  try {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      myUsername = JSON.parse(userStr).username;
+    }
+  } catch (e) {}
+
+  const getChannelPrefix = (ch: ChatChannel) => {
+    switch (ch) {
+      case "global": return gameType ? `global:${gameType}` : null;
+      case "room": return roomId ? `room:${roomId}` : null;
+      case "game": return matchId ? `match:${matchId}` : null;
+      default: return null;
+    }
+  };
+
+  useEffect(() => {
+    const socket = socketRef?.current;
+    if (!socket) return;
+
+    // Join all available channels that have a valid context
+    availableChannels.forEach((ch) => {
+      const channelId = getChannelPrefix(ch);
+      if (channelId) socket.emit("joinChat", { channel: channelId });
+    });
+
+    const handleChatHistory = (data: { channel: string; messages: any[] }) => {
+      const parsedChannel = data.channel.split(":")[0] as ChatChannel;
+      if (!availableChannels.includes(parsedChannel)) return;
+      
+      const formattedMessages = data.messages.map(m => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+        channel: parsedChannel,
+      }));
+
+      setMessages(prev => {
+        // Replace messages for this channel
+        const filtered = prev.filter(m => m.channel !== parsedChannel);
+        return [...filtered, ...formattedMessages].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      });
+    };
+
+    const handleChatMessage = (data: { channel: string; message: any }) => {
+      const parsedChannel = data.channel.split(":")[0] as ChatChannel;
+      if (!availableChannels.includes(parsedChannel)) return;
+
+      const formattedMsg: ChatMessage = {
+        ...data.message,
+        timestamp: new Date(data.message.timestamp),
+        channel: parsedChannel,
+      };
+
+      setMessages(prev => [...prev, formattedMsg]);
+
+      // Trigger unread notification if closed and message is from someone else
+      if (!isOpenRef.current && formattedMsg.sender !== myUsername) {
+        onUnreadMessagesChange?.(true);
+      }
+    };
+
+    socket.on("chatHistory", handleChatHistory);
+    socket.on("chatMessage", handleChatMessage);
+
+    return () => {
+      socket.off("chatHistory", handleChatHistory);
+      socket.off("chatMessage", handleChatMessage);
+      availableChannels.forEach((ch) => {
+        const channelId = getChannelPrefix(ch);
+        if (channelId) socket.emit("leaveChat", { channel: channelId });
+      });
+    };
+  }, [socketRef?.current, gameType, roomId, matchId, availableChannels.join(",")]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -56,15 +135,16 @@ const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentCh
   }, [messages, channel]);
 
   const sendMessage = () => {
-    if (!input.trim()) return;
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: "You",
+    if (!input.trim() || !socketRef?.current) return;
+    
+    const channelId = getChannelPrefix(channel);
+    if (!channelId) return;
+
+    socketRef.current.emit("chatMessage", {
+      channel: channelId,
       text: input.trim(),
-      timestamp: new Date(),
-      channel,
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    });
+
     setInput("");
   };
 
@@ -159,19 +239,19 @@ const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentCh
                         </span>
                       </div>
                     ) : (
-                      <div className={`flex gap-2 ${msg.sender === "You" ? "flex-row-reverse" : ""}`}>
+                      <div className={`flex gap-2 ${msg.sender === myUsername ? "flex-row-reverse" : ""}`}>
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-[10px] font-display font-bold text-primary-foreground flex-shrink-0">
-                          {msg.sender.charAt(0)}
+                          {msg.sender.charAt(0).toUpperCase()}
                         </div>
-                        <div className={`max-w-[75%] ${msg.sender === "You" ? "items-end" : "items-start"}`}>
+                        <div className={`max-w-[75%] ${msg.sender === myUsername ? "items-end" : "items-start"}`}>
                           <div className="flex items-baseline gap-1.5 mb-0.5">
-                            {msg.sender !== "You" && (
+                            {msg.sender !== myUsername && (
                               <span className="text-[10px] font-display font-semibold text-foreground">{msg.sender}</span>
                             )}
                             <span className="text-[9px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
                           </div>
                           <div className={`px-3 py-1.5 rounded-xl text-xs ${
-                            msg.sender === "You"
+                            msg.sender === myUsername
                               ? "bg-primary text-primary-foreground rounded-tr-sm"
                               : "bg-muted text-foreground rounded-tl-sm"
                           }`}>

@@ -22,6 +22,11 @@ export class WalletController {
     return this.walletService.withdraw(req.user.userId, amount);
   }
 
+  @Post('transfer')
+  transfer(@Request() req, @Body('targetUsername') targetUsername: string, @Body('amount') amount: number) {
+    return this.walletService.transfer(req.user.userId, targetUsername, amount);
+  }
+
   @Get('transactions')
   getTransactions(@Request() req) {
     return this.walletService.getTransactions(req.user.userId);

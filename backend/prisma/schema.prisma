@@ -7,19 +7,20 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  passwordHash String
-  avatar       String?
-  level        Int       @default(1)
-  exp          Int       @default(0)
-  isBanned     Boolean   @default(false)
-  wallet       Wallet?
-  matches      MatchParticipant[]
-  moves        MatchMove[]
-  transactions Transaction[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  username      String    @unique
+  passwordHash  String
+  avatar        String?
+  level         Int       @default(1)
+  exp           Int       @default(0)
+  isBanned      Boolean   @default(false)
+  wallet        Wallet?
+  matches       MatchParticipant[]
+  moves         MatchMove[]
+  transactions  Transaction[]
+  notifications Notification[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model SystemSetting {
@@ -103,4 +104,17 @@ enum TransactionType {
   WITHDRAW
   STAKE
   WIN
+  COMMISSION
+  TRANSFER
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   @default("system")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

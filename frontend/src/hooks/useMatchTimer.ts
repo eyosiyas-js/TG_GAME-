@@ -57,5 +57,12 @@ export const useMatchTimer = () => {
     setIsRunning(true);
   }, [elapsed]);
 
-  return { elapsed, isRunning, start, stop, reset, pause, resume, formatted: formatTime(elapsed) };
+  // Restore the timer from an absolute server-side epoch timestamp (for rejoin accuracy).
+  const startFrom = useCallback((epochMs: number) => {
+    startTimeRef.current = epochMs;
+    setElapsed(Math.floor((Date.now() - epochMs) / 1000));
+    setIsRunning(true);
+  }, []);
+
+  return { elapsed, isRunning, start, stop, reset, pause, resume, startFrom, formatted: formatTime(elapsed) };
 };

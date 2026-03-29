@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Revenue</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.1rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: #1e293b; padding: 1.25rem; border-radius: 8px; border: 1px solid #334155; }
+        .stat-card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: #22c55e; }
+        .stat-card .sub { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+
+        .game-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .game-badge.BINGO { background: #8b5cf622; color: #a78bfa; }
+        .game-badge.RPS { background: #3b82f622; color: #60a5fa; }
+        .game-badge.DICE { background: #f59e0b22; color: #fbbf24; }
+        .game-badge.GUESS { background: #10b98122; color: #34d399; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="revenue.html" class="active">Revenue</a>
+        <a href="settings.html">Settings</a>
+        <a href="notifications.html">Notifications</a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+            <div class="label">Total Revenue</div>
+            <div class="value" id="total-revenue">$0</div>
+            <div class="sub" id="total-count">0 commissions</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Today</div>
+            <div class="value" id="today-revenue">$0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">This Week</div>
+            <div class="value" id="week-revenue">$0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">This Month</div>
+            <div class="value" id="month-revenue">$0</div>
+        </div>
+    </div>
+
+    <!-- Per-Game Breakdown -->
+    <div class="card">
+        <h2>Revenue by Game</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Game</th>
+                    <th>Total Revenue</th>
+                    <th>Matches with Commission</th>
+                    <th>Avg Commission</th>
+                </tr>
+            </thead>
+            <tbody id="game-revenue-body">
+                <tr><td colspan="4">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Recent Commissions -->
+    <div class="card">
+        <h2>Recent Commissions</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Game</th>
+                    <th>Match Stake</th>
+                    <th>Commission</th>
+                </tr>
+            </thead>
+            <tbody id="recent-body">
+                <tr><td colspan="4">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = 'http://localhost:3005';
+
+        const gameEmojis = { BINGO: '🎱', RPS: '✊', DICE: '🎲', GUESS: '🔢' };
+
+        async function loadRevenue() {
+            try {
+                const res = await fetch(`${API}/admin/revenue`);
+                const data = await res.json();
+
+                // Summary cards
+                document.getElementById('total-revenue').textContent = `$${Number(data.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('total-count').textContent = `${data.totalCommissions} commissions`;
+                document.getElementById('today-revenue').textContent = `$${Number(data.todayRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('week-revenue').textContent = `$${Number(data.weekRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('month-revenue').textContent = `$${Number(data.monthRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+                // Per-game breakdown
+                const gameBody = document.getElementById('game-revenue-body');
+                gameBody.innerHTML = '';
+                if (data.revenueByGame.length === 0) {
+                    gameBody.innerHTML = '<tr><td colspan="4" style="color: #64748b;">No commission data yet. Revenue will appear after matches are played.</td></tr>';
+                } else {
+                    data.revenueByGame.forEach(g => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><span class="game-badge ${g.gameType}">${gameEmojis[g.gameType] || ''} ${g.gameType}</span></td>
+                            <td style="color: #22c55e; font-weight: bold;">$${Number(g.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>${g.matchCount}</td>
+                            <td>$${Number(g.avgCommission).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        `;
+                        gameBody.appendChild(tr);
+                    });
+                }
+
+                // Recent commissions
+                const recentBody = document.getElementById('recent-body');
+                recentBody.innerHTML = '';
+                if (data.recentCommissions.length === 0) {
+                    recentBody.innerHTML = '<tr><td colspan="4" style="color: #64748b;">No commissions recorded yet.</td></tr>';
+                } else {
+                    data.recentCommissions.forEach(c => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td style="font-size: 0.85rem;">${new Date(c.createdAt).toLocaleString()}</td>
+                            <td><span class="game-badge ${c.gameType}">${gameEmojis[c.gameType] || ''} ${c.gameType}</span></td>
+                            <td>$${Number(c.stake).toLocaleString()}</td>
+                            <td style="color: #22c55e; font-weight: bold;">$${Number(c.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        `;
+                        recentBody.appendChild(tr);
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to load revenue:', e);
+            }
+        }
+
+        loadRevenue();
+        setInterval(loadRevenue, 10000);
+    </script>
+</body>
+</html>

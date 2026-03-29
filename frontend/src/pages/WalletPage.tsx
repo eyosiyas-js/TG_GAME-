@@ -4,9 +4,11 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownLeft, Clock, Plus, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { X, Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
 
 const WalletPage = () => {
-  const { data: balance, isLoading } = useQuery({
+  const { data: balance, isLoading, refetch: refetchBalance } = useQuery({
     queryKey: ["wallet-balance"],
     queryFn: () => {
       const token = localStorage.getItem("token");
@@ -15,7 +17,7 @@ const WalletPage = () => {
     },
   });
 
-  const { data: transactionsData, isLoading: isTxLoading } = useQuery({
+  const { data: transactionsData, isLoading: isTxLoading, refetch: refetchTx } = useQuery({
     queryKey: ["wallet-transactions"],
     queryFn: () => {
       const token = localStorage.getItem("token");
@@ -25,6 +27,29 @@ const WalletPage = () => {
   });
 
   const [activeTab, setActiveTab] = useState<"all" | "deposits" | "withdrawals">("all");
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  const handleTransfer = async () => {
+    if (!transferTarget || !transferAmount || Number(transferAmount) <= 0) return;
+    setIsTransferring(true);
+    try {
+      const token = localStorage.getItem("token") || "";
+      await api.post("/wallet/transfer", { targetUsername: transferTarget, amount: Number(transferAmount) }, token);
+      toast.success(`Successfully sent $${transferAmount} to ${transferTarget}`);
+      setShowTransfer(false);
+      setTransferTarget("");
+      setTransferAmount("");
+      refetchBalance();
+      refetchTx();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Transfer failed");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
   
   const transactions = (transactionsData || []).map((tx: any) => ({
     id: tx.id,
@@ -35,6 +60,7 @@ const WalletPage = () => {
   }));
 
   const filtered = transactions.filter((t: any) => {
+    if (!["DEPOSIT", "WITHDRAW", "TRANSFER"].includes(t.type)) return false;
     if (activeTab === "deposits") return t.amount > 0;
     if (activeTab === "withdrawals") return t.amount < 0;
     return true;
@@ -53,22 +79,52 @@ const WalletPage = () => {
           <h2 className="text-4xl font-display font-extrabold text-foreground mb-4">
             {isLoading ? "..." : `$${Number(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           </h2>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Link to="/deposit" className="flex-1">
-              <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm">
+              <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm">
                 <Plus className="w-4 h-4" />
                 Deposit
               </motion.div>
             </Link>
             <Link to="/withdraw" className="flex-1">
-              <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border">
+              <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border">
                 <Minus className="w-4 h-4" />
                 Withdraw
               </motion.div>
             </Link>
+            <button onClick={() => setShowTransfer(true)} className="flex-1">
+              <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-display font-bold text-sm border border-border">
+                <Send className="w-4 h-4" />
+                Transfer
+              </motion.div>
+            </button>
           </div>
         </div>
       </motion.div>
+
+      {showTransfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-display font-bold">Transfer Funds</h2>
+              <button onClick={() => setShowTransfer(false)} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Recipient Username</label>
+                <input type="text" value={transferTarget} onChange={e => setTransferTarget(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Target username..." />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Amount ($)</label>
+                <input type="number" min="1" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Amount to send..." />
+              </div>
+              <button disabled={isTransferring} onClick={handleTransfer} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50">
+                {isTransferring ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Funds"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4">
         {(["all", "deposits", "withdrawals"] as const).map((tab) => (

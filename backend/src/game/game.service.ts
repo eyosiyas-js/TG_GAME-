@@ -49,6 +49,27 @@ export class GameService {
   async getDisconnectTimeMs() { return parseInt(await this.getSetting('DISCONNECT_TIMEOUT', '60000'), 10) || 60000; }
   async getBingoQuickPlayers() { return parseInt(await this.getSetting('BINGO_QUICK_PLAYERS', '4'), 10) || 4; }
 
+  async getCommissionRate(gameType: string): Promise<number> {
+    const pct = parseFloat(await this.getSetting(`COMMISSION_${gameType}`, '10'));
+    return (isNaN(pct) ? 10 : pct) / 100;
+  }
+
+  async isGameEnabled(gameType: string): Promise<boolean> {
+    const val = await this.getSetting(`GAME_ENABLED_${gameType}`, 'true');
+    return val !== 'false';
+  }
+
+  async isMaintenanceMode(): Promise<boolean> {
+    const val = await this.getSetting('MAINTENANCE_MODE', 'false');
+    return val === 'true';
+  }
+
+  private applyCommission(totalPot: number, commissionRate: number): { winAmount: number; commission: number } {
+    const commission = Math.floor(totalPot * commissionRate * 100) / 100;
+    const winAmount = totalPot - commission;
+    return { winAmount, commission };
+  }
+
   async getAdminLiveGames() {
     const matches = await this.prisma.match.findMany({
       where: { status: 'PLAYING' },
@@ -75,6 +96,7 @@ export class GameService {
       },
       include: {
         participants: { include: { user: true } },
+        transactions: { where: { userId, type: 'WIN' } },
       },
       orderBy: { createdAt: 'desc' },
       take: 10,
@@ -427,7 +449,9 @@ export class GameService {
               data: { status: 'FINISHED', winnerId, endedAt: new Date() },
             });
             const stake = Number(match.stake);
-            const winAmount = stake * match.participants.length;
+            const totalPot = stake * match.participants.length;
+            const commissionRate = await this.getCommissionRate(match.gameType);
+            const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
             await tx.wallet.update({
               where: { userId: winnerId },
               data: { balance: { increment: winAmount } },
@@ -435,10 +459,18 @@ export class GameService {
             await tx.transaction.create({
               data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
             });
-            return tx.match.findUnique({
+            if (commission > 0) {
+              await tx.transaction.create({
+                data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+              });
+            }
+            const updatedMatch = await tx.match.findUnique({
               where: { id: matchId },
               include: { participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true } } } }, moves: true },
             });
+            (updatedMatch as any).winAmount = winAmount;
+            (updatedMatch as any).commission = commission;
+            return updatedMatch;
           });
         }
       }
@@ -458,7 +490,9 @@ export class GameService {
 
       const stake = Number(match.stake);
       if (winnerId) {
-        const winAmount = stake * match.participants.length;
+        const totalPot = stake * match.participants.length;
+        const commissionRate = await this.getCommissionRate(match.gameType);
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
         await tx.wallet.update({
           where: { userId: winnerId },
           data: { balance: { increment: winAmount } },
@@ -466,9 +500,14 @@ export class GameService {
         await tx.transaction.create({
           data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
         });
+        if (commission > 0) {
+          await tx.transaction.create({
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+          });
+        }
       }
 
-      return tx.match.findUnique({
+      const updatedMatch = await tx.match.findUnique({
         where: { id: matchId },
         include: {
           participants: {
@@ -477,6 +516,15 @@ export class GameService {
           moves: true,
         },
       });
+      // We know winAmount from earlier if there's a winner
+      if (winnerId) {
+        const totalPot = stake * match.participants.length;
+        const commissionRate = await this.getCommissionRate(match.gameType);
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
+        (updatedMatch as any).winAmount = winAmount;
+        (updatedMatch as any).commission = commission;
+      }
+      return updatedMatch;
     });
   }
 
@@ -645,7 +693,9 @@ export class GameService {
     if (!match) return null;
 
     const playerCount = match.participants.length;
-    const winAmount = Number(match.stake) * playerCount;
+    const totalPot = Number(match.stake) * playerCount;
+    const commissionRate = await this.getCommissionRate(match.gameType);
+    const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
 
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.match.update({
@@ -660,8 +710,13 @@ export class GameService {
       await tx.transaction.create({
         data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
       });
+      if (commission > 0) {
+        await tx.transaction.create({
+          data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+        });
+      }
 
-      return tx.match.findUnique({
+      const updatedMatch = await tx.match.findUnique({
         where: { id: matchId },
         include: {
           participants: {
@@ -669,6 +724,9 @@ export class GameService {
           },
         },
       });
+      (updatedMatch as any).winAmount = winAmount;
+      (updatedMatch as any).commission = commission;
+      return updatedMatch;
     });
 
     // Clean up in-memory state after DB finalization
@@ -756,7 +814,9 @@ export class GameService {
 
       const stake = Number(match.stake);
       if (winnerId) {
-        const winAmount = stake * 2;
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('GUESS');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
         await tx.wallet.update({
           where: { userId: winnerId },
           data: { balance: { increment: winAmount } },
@@ -764,6 +824,11 @@ export class GameService {
         await tx.transaction.create({
           data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
         });
+        if (commission > 0) {
+          await tx.transaction.create({
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+          });
+        }
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({ where: { userId: p.userId }, data: { balance: { increment: stake } } });
@@ -771,10 +836,19 @@ export class GameService {
         }
       }
 
-      return tx.match.findUnique({
+      const updatedMatch = await tx.match.findUnique({
         where: { id: matchId },
         include: { moves: true, participants: true },
       });
+      if (winnerId) {
+        const stake = Number(match.stake);
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('GUESS');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
+        (updatedMatch as any).winAmount = winAmount;
+        (updatedMatch as any).commission = commission;
+      }
+      return updatedMatch;
     });
   }
 
@@ -884,7 +958,9 @@ export class GameService {
 
       const stake = Number(match.stake);
       if (winnerId) {
-        const winAmount = stake * 2;
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('DICE');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
         await tx.wallet.update({
           where: { userId: winnerId },
           data: { balance: { increment: winAmount } },
@@ -892,6 +968,11 @@ export class GameService {
         await tx.transaction.create({
           data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
         });
+        if (commission > 0) {
+          await tx.transaction.create({
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+          });
+        }
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({ where: { userId: p.userId }, data: { balance: { increment: stake } } });
@@ -899,10 +980,19 @@ export class GameService {
         }
       }
 
-      return tx.match.findUnique({
+      const updatedMatch = await tx.match.findUnique({
         where: { id: matchId },
         include: { moves: true, participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true } } } } },
       });
+      if (winnerId) {
+        const stake = Number(match.stake);
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('DICE');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
+        (updatedMatch as any).winAmount = winAmount;
+        (updatedMatch as any).commission = commission;
+      }
+      return updatedMatch;
     });
   }
 
@@ -938,7 +1028,9 @@ export class GameService {
 
       const stake = Number(match.stake);
       if (winnerId) {
-        const winAmount = stake * 2;
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('RPS');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
         await tx.wallet.update({
           where: { userId: winnerId },
           data: { balance: { increment: winAmount } },
@@ -946,6 +1038,11 @@ export class GameService {
         await tx.transaction.create({
           data: { userId: winnerId, amount: winAmount, type: 'WIN', matchId },
         });
+        if (commission > 0) {
+          await tx.transaction.create({
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+          });
+        }
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({
@@ -958,13 +1055,22 @@ export class GameService {
         }
       }
 
-      return tx.match.findUnique({
+      const updatedMatch = await tx.match.findUnique({
         where: { id: matchId },
         include: {
           moves: true,
           participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true } } } },
         },
       });
+      if (winnerId) {
+        const stake = Number(match.stake);
+        const totalPot = stake * 2;
+        const commissionRate = await this.getCommissionRate('RPS');
+        const { winAmount, commission } = this.applyCommission(totalPot, commissionRate);
+        (updatedMatch as any).winAmount = winAmount;
+        (updatedMatch as any).commission = commission;
+      }
+      return updatedMatch;
     });
   }
 }

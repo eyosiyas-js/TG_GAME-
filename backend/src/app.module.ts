@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { WalletModule } from './wallet/wallet.module';
 import { GameModule } from './game/game.module';
 import { AdminModule } from './admin/admin.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AdminModule } from './admin/admin.module';
     WalletModule,
     GameModule,
     AdminModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
