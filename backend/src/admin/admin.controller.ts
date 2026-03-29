@@ -54,4 +54,9 @@ export class AdminController {
   getMaintenanceStatus() {
     return this.adminService.getMaintenanceStatus();
   }
+
+  @Get('tables/:tableName')
+  getTableData(@Param('tableName') tableName: string) {
+    return this.adminService.getTableData(tableName);
+  }
 }
