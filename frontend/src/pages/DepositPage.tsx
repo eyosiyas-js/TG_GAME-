@@ -1,21 +1,28 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle2, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 
 const paymentMethods = [
-  { id: "card", label: "Card Payment", icon: CreditCard, desc: "Visa, Mastercard, etc." },
-  { id: "mobile", label: "Mobile Money", icon: Smartphone, desc: "M-Pesa, Airtel Money" },
-  { id: "bank", label: "Bank Transfer", icon: Building2, desc: "Direct bank transfer" },
+  { id: "cbe", label: "CBE", icon: Building2, desc: "Commercial Bank of Ethiopia" },
+  { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "CBE Mobile Money" },
+  { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Ethio Telecom Mobile Money" },
 ];
 
 const DepositPage = () => {
   const [method, setMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentId, setPaymentId] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [receipt, setReceipt] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [settings, setSettings] = useState<any>({});
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get("/admin/settings").then(data => setSettings(data)).catch(console.error);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -27,7 +34,7 @@ const DepositPage = () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) throw new Error("No token found");
-        await api.post("/wallet/deposit", { amount: Number(amount) }, token);
+        await api.post("/wallet/deposit", { amount: Number(amount), senderName }, token);
         setSubmitted(true);
       } catch (err: any) {
         alert(err.message);
@@ -110,24 +117,98 @@ const DepositPage = () => {
       {/* Instructions */}
       <AnimatePresence>
         {method && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden">
-            <div className="card-game rounded-xl p-4 space-y-3">
-              <p className="text-xs font-display font-bold text-muted-foreground uppercase">Instructions</p>
-              <div className="space-y-2 text-xs text-muted-foreground">
-                <p>1. Send payment of <span className="text-foreground font-semibold">${amount || "0"}</span> to:</p>
-                <div className="bg-muted rounded-lg p-3 flex items-center justify-between">
-                  <span className="font-display font-bold text-foreground text-sm">
-                    {method === "card" ? "4242 •••• •••• 1234" : method === "mobile" ? "+1 234 567 8900" : "ACC: 12345678"}
-                  </span>
-                  <Copy className="w-4 h-4 text-muted-foreground cursor-pointer" />
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden space-y-4">
+            
+            {/* Steps Section */}
+            <div className="card-game rounded-xl p-4 space-y-4">
+              <p className="text-xs font-display font-bold text-muted-foreground uppercase">Steps</p>
+              <div className="space-y-4 text-xs text-muted-foreground">
+                <p>1. Send payment of <span className="text-foreground font-semibold">${amount || "0"}</span> to one of the following accounts:</p>
+                <div className="grid gap-2">
+                  <div className="bg-muted rounded-lg p-3 border border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-display font-bold text-foreground text-sm tracking-widest">
+                        {method === "cbe" ? settings.PAY_CBE_1_NUM : method === "cbebirr" ? settings.PAY_CBEBIRR_1_NUM : settings.PAY_TELEBIRR_1_NUM || "Loading..."}
+                      </span>
+                      <Copy className="w-4 h-4 text-primary cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigator.clipboard.writeText(method === "cbe" ? settings.PAY_CBE_1_NUM : method === "cbebirr" ? settings.PAY_CBEBIRR_1_NUM : settings.PAY_TELEBIRR_1_NUM || "")} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                      {method === "cbe" ? settings.PAY_CBE_1_NAME : method === "cbebirr" ? settings.PAY_CBEBIRR_1_NAME : settings.PAY_TELEBIRR_1_NAME || "Loading..."}
+                    </span>
+                  </div>
+                  
+                  <div className="bg-muted rounded-lg p-3 border border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-display font-bold text-foreground text-sm tracking-widest">
+                        {method === "cbe" ? settings.PAY_CBE_2_NUM : method === "cbebirr" ? settings.PAY_CBEBIRR_2_NUM : settings.PAY_TELEBIRR_2_NUM || "Loading..."}
+                      </span>
+                      <Copy className="w-4 h-4 text-primary cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigator.clipboard.writeText(method === "cbe" ? settings.PAY_CBE_2_NUM : method === "cbebirr" ? settings.PAY_CBEBIRR_2_NUM : settings.PAY_TELEBIRR_2_NUM || "")} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                      {method === "cbe" ? settings.PAY_CBE_2_NAME : method === "cbebirr" ? settings.PAY_CBEBIRR_2_NAME : settings.PAY_TELEBIRR_2_NAME || "Loading..."}
+                    </span>
+                  </div>
                 </div>
-                <p>2. Enter the payment/transaction ID below</p>
-                <p>3. Upload a receipt screenshot for faster verification</p>
+                <p>2. Enter your "Sender's Name" and transaction ID below.</p>
+                <p>3. Upload a receipt screenshot for faster verification.</p>
               </div>
             </div>
+
+            {/* Guide Section */}
+            <div className="card-game rounded-xl p-4 space-y-3">
+              <p className="text-xs font-display font-bold text-muted-foreground uppercase">Guide</p>
+              
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
+                {[1, 2, 3, 4].map(idx => (
+                  <button 
+                    key={idx} 
+                    onClick={() => setSelectedImage(`https://placehold.co/600x400/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`)}
+                    className="flex-shrink-0 w-24 h-16 rounded-md overflow-hidden border border-border hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <img src={`https://placehold.co/150x100/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`} alt="Step Thumbnail" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-full bg-muted rounded-xl aspect-video overflow-hidden border border-border relative">
+                <iframe 
+                  width="100%" 
+                  height="100%" 
+                  src="https://www.youtube.com/embed/dQw4w9WgXcQ" 
+                  title="YouTube video player" 
+                  frameBorder="0" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full"
+                ></iframe>
+              </div>
+            </div>
+
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Sender Name & Warning */}
+      {method && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 mb-4 flex gap-3">
+             <div className="w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                <span className="text-destructive font-bold">!</span>
+             </div>
+             <div>
+                <p className="text-xs font-bold text-destructive mb-1 uppercase tracking-wider">Crucial Requirement</p>
+                <p className="text-xs text-destructive/80 leading-relaxed font-medium">The sender's name provided below <span className="font-bold underline">must match exactly</span> with the name used during the real-world transfer. Any mismatch will result in severe delays or potential loss of funds.</p>
+             </div>
+          </div>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Sender's Name</label>
+          <input
+            value={senderName}
+            onChange={(e) => setSenderName(e.target.value)}
+            placeholder="Name used on your bank/mobile account..."
+            className="w-full h-12 px-4 rounded-xl bg-muted border border-border text-foreground font-display font-semibold text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+          />
+        </motion.div>
+      )}
 
       {/* Payment ID */}
       {method && (
@@ -158,11 +239,41 @@ const DepositPage = () => {
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={handleSubmit}
-        disabled={!amount || !method || !paymentId}
+        disabled={!amount || !method || !paymentId || !senderName}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
         Submit Deposit
       </motion.button>
+
+      {/* Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }} 
+              animate={{ scale: 1 }} 
+              exit={{ scale: 0.95 }}
+              className="relative max-w-4xl w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <img src={selectedImage} alt="Fullscreen guide" className="w-full h-auto rounded-xl border border-white/20 shadow-2xl" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

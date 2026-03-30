@@ -3,8 +3,8 @@ import { api } from "@/lib/api";
 import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownLeft, Clock, Plus, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
-import { X, Loader2, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Loader2, Send, User } from "lucide-react";
 import { toast } from "sonner";
 
 const WalletPage = () => {
@@ -31,6 +31,34 @@ const WalletPage = () => {
   const [transferTarget, setTransferTarget] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
+  const [previewUser, setPreviewUser] = useState<any>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+
+  useEffect(() => {
+    if (transferTarget.length < 3) {
+      setPreviewUser(null);
+      setPreviewError("");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      setPreviewError("");
+      try {
+        const token = localStorage.getItem("token") || "";
+        const user = await api.get(`/wallet/user-preview/${transferTarget}`, token);
+        setPreviewUser(user);
+      } catch (err: any) {
+        setPreviewUser(null);
+        setPreviewError("User not found");
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [transferTarget]);
 
   const handleTransfer = async () => {
     if (!transferTarget || !transferAmount || Number(transferAmount) <= 0) return;
@@ -42,6 +70,8 @@ const WalletPage = () => {
       setShowTransfer(false);
       setTransferTarget("");
       setTransferAmount("");
+      setPreviewUser(null);
+      setPreviewError("");
       refetchBalance();
       refetchTx();
     } catch (e: any) {
@@ -107,18 +137,43 @@ const WalletPage = () => {
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-display font-bold">Transfer Funds</h2>
-              <button onClick={() => setShowTransfer(false)} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowTransfer(false); setTransferTarget(""); setTransferAmount(""); setPreviewUser(null); setPreviewError(""); }} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground mb-1 block">Recipient Username</label>
                 <input type="text" value={transferTarget} onChange={e => setTransferTarget(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Target username..." />
+                {transferTarget.length >= 3 && (
+                  <div className="mt-2 h-14 flex items-center">
+                    {isPreviewLoading ? (
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Checking user...
+                      </div>
+                    ) : previewError ? (
+                      <div className="text-destructive text-sm font-semibold">{previewError}</div>
+                    ) : previewUser ? (
+                      <div className="flex items-center gap-3 bg-secondary/50 rounded-lg p-2 w-full border border-border">
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                          {previewUser.avatar ? (
+                            <img src={previewUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-5 h-5 text-primary" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-display font-bold text-sm leading-tight text-foreground">{previewUser.username}</p>
+                          <p className="text-xs text-muted-foreground font-semibold">Level {previewUser.level}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground mb-1 block">Amount ($)</label>
                 <input type="number" min="1" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Amount to send..." />
               </div>
-              <button disabled={isTransferring} onClick={handleTransfer} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50">
+              <button disabled={isTransferring || !!previewError || !previewUser} onClick={handleTransfer} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
                 {isTransferring ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Funds"}
               </button>
             </div>

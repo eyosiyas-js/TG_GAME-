@@ -144,6 +144,44 @@
         <button onclick="saveGameSettings()">Save Game Settings</button>
     </div>
 
+    <!-- Payment Settings -->
+    <div class="card">
+        <h2>🏦 Deposit Payment Methods</h2>
+        <p style="font-size: 0.85rem; color: #64748b; margin-top: 0;">Configure the 2 recipient accounts shown to users for each method.</p>
+        
+        <h3 style="color: #cbd5e1; margin-top: 1.5rem; font-size: 1.1rem; border-bottom: 1px dashed #334155; padding-bottom: 0.3rem;">CBE (Commercial Bank of Ethiopia)</h3>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="flex:1;"><label>Account 1 Number</label><input type="text" id="pm-cbe-1-num" placeholder="e.g. 1000123456789"></div>
+            <div style="flex:1;"><label>Account 1 Name</label><input type="text" id="pm-cbe-1-name" placeholder="e.g. Abebe Kebede"></div>
+        </div>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <div style="flex:1;"><label>Account 2 Number</label><input type="text" id="pm-cbe-2-num" placeholder="e.g. 1000987654321"></div>
+            <div style="flex:1;"><label>Account 2 Name</label><input type="text" id="pm-cbe-2-name" placeholder="e.g. Game Corp"></div>
+        </div>
+
+        <h3 style="color: #cbd5e1; margin-top: 1.5rem; font-size: 1.1rem; border-bottom: 1px dashed #334155; padding-bottom: 0.3rem;">CBE Birr</h3>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="flex:1;"><label>Account 1 Phone</label><input type="text" id="pm-cbebirr-1-num" placeholder="e.g. 0911234567"></div>
+            <div style="flex:1;"><label>Account 1 Name</label><input type="text" id="pm-cbebirr-1-name" placeholder="e.g. Abebe Kebede"></div>
+        </div>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <div style="flex:1;"><label>Account 2 Phone</label><input type="text" id="pm-cbebirr-2-num" placeholder="e.g. 0987654321"></div>
+            <div style="flex:1;"><label>Account 2 Name</label><input type="text" id="pm-cbebirr-2-name" placeholder="e.g. Game Corp"></div>
+        </div>
+
+        <h3 style="color: #cbd5e1; margin-top: 1.5rem; font-size: 1.1rem; border-bottom: 1px dashed #334155; padding-bottom: 0.3rem;">Telebirr</h3>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="flex:1;"><label>Account 1 Phone</label><input type="text" id="pm-telebirr-1-num" placeholder="e.g. 0911234567"></div>
+            <div style="flex:1;"><label>Account 1 Name</label><input type="text" id="pm-telebirr-1-name" placeholder="e.g. Abebe Kebede"></div>
+        </div>
+        <div class="form-group" style="display:flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <div style="flex:1;"><label>Account 2 Phone</label><input type="text" id="pm-telebirr-2-num" placeholder="e.g. 0987654321"></div>
+            <div style="flex:1;"><label>Account 2 Name</label><input type="text" id="pm-telebirr-2-name" placeholder="e.g. Game Corp"></div>
+        </div>
+
+        <button onclick="savePaymentSettings()">Save Payment Methods</button>
+    </div>
+
     <div id="toast">Settings updated successfully!</div>
 
     <script>
@@ -177,6 +215,22 @@
                 document.getElementById('game-RPS').checked = settings.GAME_ENABLED_RPS !== 'false';
                 document.getElementById('game-DICE').checked = settings.GAME_ENABLED_DICE !== 'false';
                 document.getElementById('game-GUESS').checked = settings.GAME_ENABLED_GUESS !== 'false';
+
+                // Payment info
+                document.getElementById('pm-cbe-1-num').value = settings.PAY_CBE_1_NUM || '';
+                document.getElementById('pm-cbe-1-name').value = settings.PAY_CBE_1_NAME || '';
+                document.getElementById('pm-cbe-2-num').value = settings.PAY_CBE_2_NUM || '';
+                document.getElementById('pm-cbe-2-name').value = settings.PAY_CBE_2_NAME || '';
+                
+                document.getElementById('pm-cbebirr-1-num').value = settings.PAY_CBEBIRR_1_NUM || '';
+                document.getElementById('pm-cbebirr-1-name').value = settings.PAY_CBEBIRR_1_NAME || '';
+                document.getElementById('pm-cbebirr-2-num').value = settings.PAY_CBEBIRR_2_NUM || '';
+                document.getElementById('pm-cbebirr-2-name').value = settings.PAY_CBEBIRR_2_NAME || '';
+
+                document.getElementById('pm-telebirr-1-num').value = settings.PAY_TELEBIRR_1_NUM || '';
+                document.getElementById('pm-telebirr-1-name').value = settings.PAY_TELEBIRR_1_NAME || '';
+                document.getElementById('pm-telebirr-2-num').value = settings.PAY_TELEBIRR_2_NUM || '';
+                document.getElementById('pm-telebirr-2-name').value = settings.PAY_TELEBIRR_2_NAME || '';
 
                 // Maintenance mode
                 document.getElementById('maintenance-toggle').checked = settings.MAINTENANCE_MODE === 'true';
@@ -257,6 +311,33 @@
                 });
             }
             showToast('Game settings updated!');
+        }
+
+        async function savePaymentSettings() {
+            const updates = [
+                { key: 'PAY_CBE_1_NUM', value: document.getElementById('pm-cbe-1-num').value },
+                { key: 'PAY_CBE_1_NAME', value: document.getElementById('pm-cbe-1-name').value },
+                { key: 'PAY_CBE_2_NUM', value: document.getElementById('pm-cbe-2-num').value },
+                { key: 'PAY_CBE_2_NAME', value: document.getElementById('pm-cbe-2-name').value },
+                
+                { key: 'PAY_CBEBIRR_1_NUM', value: document.getElementById('pm-cbebirr-1-num').value },
+                { key: 'PAY_CBEBIRR_1_NAME', value: document.getElementById('pm-cbebirr-1-name').value },
+                { key: 'PAY_CBEBIRR_2_NUM', value: document.getElementById('pm-cbebirr-2-num').value },
+                { key: 'PAY_CBEBIRR_2_NAME', value: document.getElementById('pm-cbebirr-2-name').value },
+
+                { key: 'PAY_TELEBIRR_1_NUM', value: document.getElementById('pm-telebirr-1-num').value },
+                { key: 'PAY_TELEBIRR_1_NAME', value: document.getElementById('pm-telebirr-1-name').value },
+                { key: 'PAY_TELEBIRR_2_NUM', value: document.getElementById('pm-telebirr-2-num').value },
+                { key: 'PAY_TELEBIRR_2_NAME', value: document.getElementById('pm-telebirr-2-name').value }
+            ];
+            for (const item of updates) {
+                await fetch(`${API}/admin/settings`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item)
+                });
+            }
+            showToast('Payment methods updated!');
         }
 
         loadSettings();

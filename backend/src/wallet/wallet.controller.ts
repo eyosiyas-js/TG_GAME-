@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Request, Param } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -12,9 +12,14 @@ export class WalletController {
     return this.walletService.getBalance(req.user.userId);
   }
 
+  @Get('user-preview/:username')
+  getUserPreview(@Param('username') username: string) {
+    return this.walletService.getUserPreview(username);
+  }
+
   @Post('deposit')
-  deposit(@Request() req, @Body('amount') amount: number) {
-    return this.walletService.deposit(req.user.userId, amount);
+  deposit(@Request() req, @Body('amount') amount: number, @Body('senderName') senderName?: string) {
+    return this.walletService.deposit(req.user.userId, amount, senderName);
   }
 
   @Post('withdraw')

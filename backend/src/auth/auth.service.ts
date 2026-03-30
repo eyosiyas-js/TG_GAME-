@@ -61,6 +61,55 @@ export class AuthService {
     return this.signToken(user.id, user.username);
   }
 
+  async changeUsername(userId: string, newUsername: string) {
+    if (!newUsername || newUsername.length < 3) {
+      throw new ConflictException('Username must be at least 3 characters');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { username: newUsername },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Username already taken');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { username: newUsername },
+    });
+
+    return this.signToken(updatedUser.id, updatedUser.username);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!newPassword || newPassword.length < 6) {
+      throw new ConflictException('New password must be at least 6 characters');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const pwMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!pwMatches) {
+      throw new UnauthorizedException('Incorrect current password');
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newPasswordHash },
+    });
+
+    return { success: true };
+  }
+
   async getLeaderboard() {
     const users = await this.prisma.user.findMany({
       take: 10,

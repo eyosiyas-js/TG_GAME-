@@ -1,11 +1,93 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Lock, Bell, Shield, LogOut, ChevronRight } from "lucide-react";
+import { ArrowLeft, User, Lock, Bell, Shield, LogOut, ChevronRight, X, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 const SettingsPage = () => {
   const [notifications, setNotifications] = useState(true);
   const navigate = useNavigate();
+
+  const [username, setUsername] = useState(localStorage.getItem("username") || "");
+
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameAvailability, setUsernameAvailability] = useState<"available" | "taken" | "">("");
+
+  useEffect(() => {
+    if (newUsername.length < 3) {
+      setUsernameAvailability("");
+      return;
+    }
+    
+    if (newUsername.toLowerCase() === username.toLowerCase()) {
+      setUsernameAvailability("");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCheckingUsername(true);
+      try {
+        const token = localStorage.getItem("token") || "";
+        await api.get(`/wallet/user-preview/${newUsername}`, token);
+        setUsernameAvailability("taken");
+      } catch (err: any) {
+        setUsernameAvailability("available");
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [newUsername, username]);
+
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
+  const handleUpdateUsername = async () => {
+    if (newUsername.length < 3) return toast.error("Username must be at least 3 characters");
+    setIsUpdatingUser(true);
+    try {
+      const token = localStorage.getItem("token") || "";
+      const res = await api.put("/auth/change-username", { newUsername }, token);
+      localStorage.setItem("token", res.access_token);
+      localStorage.setItem("username", res.user.username);
+      setUsername(res.user.username);
+      toast.success("Username updated successfully!");
+      setShowUserModal(false);
+      setNewUsername("");
+      setUsernameAvailability("");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update username");
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) return toast.error("New password must be at least 6 characters");
+    if (newPassword !== confirmPassword) return toast.error("Passwords do not match");
+    setIsUpdatingPass(true);
+    try {
+      const token = localStorage.getItem("token") || "";
+      await api.put("/auth/change-password", { currentPassword, newPassword }, token);
+      toast.success("Password updated successfully!");
+      setShowPassModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update password");
+    } finally {
+      setIsUpdatingPass(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -19,8 +101,8 @@ const SettingsPage = () => {
     {
       title: "Account",
       items: [
-        { icon: User, label: "Change Username", desc: "Player_One" },
-        { icon: Lock, label: "Change Password", desc: "Last changed 30 days ago" },
+        { icon: User, label: "Change Username", desc: username, onClick: () => setShowUserModal(true) },
+        { icon: Lock, label: "Change Password", desc: "Change your account password", onClick: () => setShowPassModal(true) },
       ],
     },
     {
@@ -61,7 +143,7 @@ const SettingsPage = () => {
             {section.items.map((itm) => (
               <button
                 key={itm.label}
-                onClick={() => {
+                onClick={(itm as any).onClick ? (itm as any).onClick : () => {
                   if (itm.toggle) setNotifications(!notifications);
                 }}
                 className="w-full card-game rounded-xl p-3.5 flex items-center gap-3"
@@ -106,6 +188,66 @@ const SettingsPage = () => {
         </div>
         <span className="text-sm font-display font-semibold text-destructive">Log Out</span>
       </motion.button>
+
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-display font-bold">Change Username</h2>
+              <button onClick={() => { setShowUserModal(false); setNewUsername(""); setUsernameAvailability(""); }} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">New Username</label>
+                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter new username..." />
+                
+                {newUsername.length >= 3 && newUsername.toLowerCase() !== username.toLowerCase() && (
+                  <div className="mt-2 text-xs font-semibold">
+                    {isCheckingUsername ? (
+                      <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Checking availability...</span>
+                    ) : usernameAvailability === "taken" ? (
+                      <span className="text-destructive">Username already taken</span>
+                    ) : usernameAvailability === "available" ? (
+                      <span className="text-green-500">Username available!</span>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+              <button disabled={isUpdatingUser || isCheckingUsername || usernameAvailability === "taken" || newUsername.length < 3} onClick={handleUpdateUsername} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
+                {isUpdatingUser ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Username"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showPassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-display font-bold">Change Password</h2>
+              <button onClick={() => setShowPassModal(false)} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Current Password</label>
+                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter current password..." />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">New Password</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter new password..." />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Confirm new password..." />
+              </div>
+              <button disabled={isUpdatingPass} onClick={handleUpdatePassword} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
+                {isUpdatingPass ? <Loader2 className="w-5 h-5 animate-spin" /> : "Update Password"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

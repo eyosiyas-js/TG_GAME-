@@ -55,6 +55,18 @@ export class AdminService {
       GAME_ENABLED_DICE: map.get('GAME_ENABLED_DICE') || 'true',
       GAME_ENABLED_GUESS: map.get('GAME_ENABLED_GUESS') || 'true',
       MAINTENANCE_MODE: map.get('MAINTENANCE_MODE') || 'false',
+      PAY_CBE_1_NUM: map.get('PAY_CBE_1_NUM') || '',
+      PAY_CBE_1_NAME: map.get('PAY_CBE_1_NAME') || '',
+      PAY_CBE_2_NUM: map.get('PAY_CBE_2_NUM') || '',
+      PAY_CBE_2_NAME: map.get('PAY_CBE_2_NAME') || '',
+      PAY_CBEBIRR_1_NUM: map.get('PAY_CBEBIRR_1_NUM') || '',
+      PAY_CBEBIRR_1_NAME: map.get('PAY_CBEBIRR_1_NAME') || '',
+      PAY_CBEBIRR_2_NUM: map.get('PAY_CBEBIRR_2_NUM') || '',
+      PAY_CBEBIRR_2_NAME: map.get('PAY_CBEBIRR_2_NAME') || '',
+      PAY_TELEBIRR_1_NUM: map.get('PAY_TELEBIRR_1_NUM') || '',
+      PAY_TELEBIRR_1_NAME: map.get('PAY_TELEBIRR_1_NAME') || '',
+      PAY_TELEBIRR_2_NUM: map.get('PAY_TELEBIRR_2_NUM') || '',
+      PAY_TELEBIRR_2_NAME: map.get('PAY_TELEBIRR_2_NAME') || '',
     };
   }
 

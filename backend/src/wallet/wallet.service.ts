@@ -18,7 +18,7 @@ export class WalletService {
     return wallet.balance;
   }
 
-  async deposit(userId: string, amount: number) {
+  async deposit(userId: string, amount: number, senderName?: string) {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
     }
@@ -78,6 +78,27 @@ export class WalletService {
 
       return updatedWallet;
     });
+  }
+
+  async getUserPreview(username: string) {
+    if (!username) {
+      throw new BadRequestException('Username is required');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        avatar: true,
+        level: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 
   async transfer(senderId: string, targetUsername: string, amount: number) {
