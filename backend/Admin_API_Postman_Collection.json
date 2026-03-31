@@ -1,0 +1,84 @@
+{
+  "info": {
+    "name": "Habtbet Admin API",
+    "description": "Postman collection for accessing the new Admin Dashboard APIs using API Keys.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3005",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "admin_key_2024_03_31_abc123",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-Admin-API-Key", "value": "{{api_key}}" } ],
+            "url": { "raw": "{{base_url}}/admin/api/users" }
+          }
+        },
+        {
+          "name": "Ban User",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "X-Admin-API-Key", "value": "{{api_key}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isBanned\": true\n}"
+            },
+            "url": { "raw": "{{base_url}}/admin/api/users/:id/ban" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Deposits",
+      "item": [
+        {
+          "name": "Get All Deposits",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-Admin-API-Key", "value": "{{api_key}}" } ],
+            "url": { "raw": "{{base_url}}/admin/api/deposits" }
+          }
+        },
+        {
+          "name": "Approve Deposit",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "X-Admin-API-Key", "value": "{{api_key}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Approved manually\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/admin/api/deposits/:id/approve" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revenue Analytics",
+      "item": [
+        {
+          "name": "Get Revenue Overview",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-Admin-API-Key", "value": "{{api_key}}" } ],
+            "url": { "raw": "{{base_url}}/admin/api/revenue/overview" }
+          }
+        }
+      ]
+    }
+  ]
+}

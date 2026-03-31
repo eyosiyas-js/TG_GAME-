@@ -8,10 +8,15 @@ import { WalletModule } from './wallet/wallet.module';
 import { GameModule } from './game/game.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationModule } from './notification/notification.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([{
+      ttl: 60,
+      limit: 50,
+    }]),
     PrismaModule,
     AuthModule,
     WalletModule,
