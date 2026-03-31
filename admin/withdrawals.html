@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Withdrawals</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.1rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 0.5rem; }
+        button.danger { background: #ef4444; color: white; }
+        .status-badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .status-badge.PENDING { background: #eab30820; color: #eab308; }
+        .status-badge.APPROVED { background: #22c55e20; color: #22c55e; }
+        .status-badge.REJECTED { background: #ef444420; color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="deposits.html">Deposits</a>
+        <a href="withdrawals.html" class="active">Withdrawals</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="revenue.html">Revenue</a>
+        <a href="settings.html">Settings</a>
+        <a href="notifications.html">Notifications</a>
+    </div>
+
+    <div class="card">
+        <h2>Withdrawal Requests</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>User / Phone</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Withdraw To</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="withdrawals-body">
+                <tr><td colspan="7">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadWithdrawals() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/withdrawals');
+                const withdrawals = await res.json();
+                const tbody = document.getElementById('withdrawals-body');
+                tbody.innerHTML = '';
+                
+                if (withdrawals.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7">No withdrawal requests found.</td></tr>';
+                    return;
+                }
+
+                withdrawals.forEach(w => {
+                    const statusBadge = `<span class="status-badge ${w.status}">${w.status}</span>`;
+                    const tr = document.createElement('tr');
+                    
+                    let actions = '';
+                    if (w.status === 'PENDING') {
+                        actions = `
+                            <button onclick="updateStatus('${w.id}', 'approve')">Approve</button>
+                            <button class="danger" onclick="updateStatus('${w.id}', 'reject')">Reject</button>
+                        `;
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${new Date(w.createdAt).toLocaleString()}</td>
+                        <td>
+                            <strong>${w.user?.username || 'No Username'}</strong><br>
+                            <span style="font-size: 0.8rem; color: #94a3b8;">${w.user?.phoneNumber}</span>
+                        </td>
+                        <td style="font-weight: bold; color: #ef4444;">-$${w.amount}</td>
+                        <td style="text-transform: uppercase;">${w.method}</td>
+                        <td>${w.phoneNumber}</td>
+                        <td>${statusBadge}</td>
+                        <td>${actions}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                document.getElementById('withdrawals-body').innerHTML = '<tr><td colspan="7" style="color: red;">Error loading withdrawals</td></tr>';
+            }
+        }
+
+        async function updateStatus(id, action) {
+            if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) return;
+            
+            try {
+                const res = await fetch(`http://localhost:3005/admin/withdrawals/${id}/${action}`, {
+                    method: 'PUT'
+                });
+                if (!res.ok) throw new Error(await res.text());
+                loadWithdrawals();
+            } catch (e) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+
+        loadWithdrawals();
+    </script>
+</body>
+</html>

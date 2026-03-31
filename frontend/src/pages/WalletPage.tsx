@@ -17,12 +17,30 @@ const WalletPage = () => {
     },
   });
 
+  const { data: depositsData, isLoading: isDepositsLoading, refetch: refetchDeposits } = useQuery({
+    queryKey: ["wallet-deposits"],
+    queryFn: () => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No token found");
+      return api.get("/wallet/deposits", token);
+    },
+  });
+
   const { data: transactionsData, isLoading: isTxLoading, refetch: refetchTx } = useQuery({
     queryKey: ["wallet-transactions"],
     queryFn: () => {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("No token found");
       return api.get("/wallet/transactions", token);
+    },
+  });
+
+  const { data: withdrawalsData } = useQuery({
+    queryKey: ["wallet-withdrawals"],
+    queryFn: () => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No token found");
+      return api.get("/wallet/withdrawals", token);
     },
   });
 
@@ -81,18 +99,48 @@ const WalletPage = () => {
     }
   };
   
-  const transactions = (transactionsData || []).map((tx: any) => ({
+  const rawTransactions = (transactionsData || []).map((tx: any) => ({
     id: tx.id,
     amount: Number(tx.amount),
     label: tx.type,
     time: new Date(tx.createdAt).toLocaleString(),
+    timestamp: new Date(tx.createdAt).getTime(),
     type: tx.type,
+    status: "SUCCESSFUL",
   }));
 
-  const filtered = transactions.filter((t: any) => {
+  const rawDeposits = (depositsData || []).map((d: any) => ({
+    id: d.id,
+    amount: Number(d.amount),
+    label: `DEPOSIT REQUEST`,
+    time: new Date(d.createdAt).toLocaleString(),
+    timestamp: new Date(d.createdAt).getTime(),
+    type: "DEPOSIT",
+    status: d.status,
+  }));
+
+  // Merge deposits and transactions. If a deposit is approved, there is already a DEPOSIT transaction for it.
+  // We only want to show PENDING or REJECTED deposits to avoid duplicates with the SUCCESSFUL transactions.
+  const activeDeposits = rawDeposits.filter((d: any) => d.status !== "APPROVED");
+
+  const rawWithdrawals = (withdrawalsData || []).map((w: any) => ({
+    id: w.id,
+    amount: -Number(w.amount),
+    label: `WITHDRAWAL REQUEST`,
+    time: new Date(w.createdAt).toLocaleString(),
+    timestamp: new Date(w.createdAt).getTime(),
+    type: "WITHDRAW",
+    status: w.status,
+  }));
+
+  const activeWithdrawals = rawWithdrawals.filter((w: any) => w.status !== "APPROVED");
+  
+  const allItems = [...rawTransactions, ...activeDeposits, ...activeWithdrawals].sort((a, b) => b.timestamp - a.timestamp);
+
+  const filtered = allItems.filter((t: any) => {
     if (!["DEPOSIT", "WITHDRAW", "TRANSFER"].includes(t.type)) return false;
-    if (activeTab === "deposits") return t.amount > 0;
-    if (activeTab === "withdrawals") return t.amount < 0;
+    if (activeTab === "deposits") return t.type === "DEPOSIT";
+    if (activeTab === "withdrawals") return t.type === "WITHDRAW";
     return true;
   });
 
@@ -196,7 +244,14 @@ const WalletPage = () => {
               {tx.amount > 0 ? <ArrowDownLeft className="w-4 h-4 text-primary" /> : <ArrowUpRight className="w-4 h-4 text-destructive" />}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-display font-semibold text-foreground">{tx.label}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-display font-semibold text-foreground">{tx.label}</p>
+                {tx.status && tx.status !== "SUCCESSFUL" && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tx.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-destructive/20 text-destructive'}`}>
+                    {tx.status}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="w-3 h-3" />
                 <span>{tx.time}</span>

@@ -1,23 +1,23 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, CreditCard, Smartphone, Building2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Smartphone, CheckCircle2, AlertTriangle, Info, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
 const withdrawMethods = [
-  { id: "card", label: "Card Withdrawal", icon: CreditCard, desc: "Visa, Mastercard" },
-  { id: "mobile", label: "Mobile Money", icon: Smartphone, desc: "M-Pesa, Airtel Money" },
-  { id: "bank", label: "Bank Transfer", icon: Building2, desc: "Direct to bank account" },
+  { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "Withdraw via CBE Birr" },
+  { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Withdraw via Telebirr" },
 ];
 
 const WithdrawPage = () => {
   const [method, setMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
-  const [accountInfo, setAccountInfo] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [userPhone, setUserPhone] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  const { data: balance = 0, isLoading } = useQuery({
+  const { data: balance = 0 } = useQuery({
     queryKey: ["wallet-balance"],
     queryFn: () => {
       const token = localStorage.getItem("token");
@@ -26,13 +26,23 @@ const WithdrawPage = () => {
     },
   });
 
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.phoneNumber) setUserPhone(parsed.phoneNumber);
+      } catch {}
+    }
+  }, []);
+
   const handleSubmit = async () => {
     const num = parseFloat(amount);
-    if (num > 0 && num <= Number(balance) && method && accountInfo) {
+    if (num > 0 && num <= Number(balance) && method) {
       try {
         const token = localStorage.getItem("token");
         if (!token) throw new Error("No token found");
-        await api.post("/wallet/withdraw", { amount: num }, token);
+        await api.post("/wallet/withdraw", { amount: num, method }, token);
         setSubmitted(true);
       } catch (err: any) {
         alert(err.message);
@@ -49,7 +59,7 @@ const WithdrawPage = () => {
           </motion.div>
           <h2 className="text-xl font-display font-bold text-foreground mb-2">Withdrawal Requested!</h2>
           <p className="text-sm text-muted-foreground mb-1">Amount: ${amount}</p>
-          <p className="text-xs text-muted-foreground mb-6">Processing typically takes 1-24 hours.</p>
+          <p className="text-xs text-muted-foreground mb-6">Your request is pending admin approval.</p>
           <Link to="/wallet" className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm inline-block">
             Back to Wallet
           </Link>
@@ -70,7 +80,7 @@ const WithdrawPage = () => {
       {/* Balance */}
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="card-game rounded-xl p-4 mb-6 text-center">
         <p className="text-xs text-muted-foreground">Available Balance</p>
-        <p className="text-2xl font-display font-extrabold text-foreground">${balance.toLocaleString()}</p>
+        <p className="text-2xl font-display font-extrabold text-foreground">${Number(balance).toLocaleString()}</p>
       </motion.div>
 
       {/* Amount */}
@@ -95,7 +105,7 @@ const WithdrawPage = () => {
         )}
         <div className="flex gap-2 mt-2">
           {[100, 500, 1000].map(a => (
-            <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(Math.min(a, balance)))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
+            <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(Math.min(a, Number(balance))))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
               ${a}
             </motion.button>
           ))}
@@ -128,31 +138,78 @@ const WithdrawPage = () => {
         </div>
       </motion.div>
 
-      {/* Account Info */}
+      {/* Phone Number (read-only) */}
       <AnimatePresence>
         {method && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden">
             <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
-              {method === "mobile" ? "Phone Number" : method === "card" ? "Card Number" : "Account Number"}
+              Phone Number
             </label>
             <input
-              value={accountInfo}
-              onChange={(e) => setAccountInfo(e.target.value)}
-              placeholder={method === "mobile" ? "+1 234 567 8900" : method === "card" ? "4242 •••• •••• ••••" : "Enter account number"}
-              className="w-full h-12 px-4 rounded-xl bg-muted border border-border text-foreground font-display font-semibold text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              value={userPhone}
+              readOnly
+              className="w-full h-12 px-4 rounded-xl bg-muted/50 border border-border text-foreground font-display font-semibold text-sm outline-none cursor-not-allowed opacity-80"
             />
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+              <Info className="w-3 h-3" />
+              <span>The withdrawal will be made to this number.</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <motion.button
         whileTap={{ scale: 0.97 }}
-        onClick={handleSubmit}
-        disabled={!amount || !method || !accountInfo || parseFloat(amount) > balance}
+        onClick={() => setShowConfirm(true)}
+        disabled={!amount || !method || parseFloat(amount) > balance || parseFloat(amount) <= 0}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
         Request Withdrawal
       </motion.button>
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowConfirm(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="card-game rounded-2xl p-6 max-w-sm w-full text-center relative overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 hover:scale-105 transition-transform cursor-default">
+                <AlertCircle className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-display font-bold text-foreground mb-2">Confirm Withdrawal</h3>
+              <p className="text-sm text-muted-foreground mb-6">Are you sure you want to proceed with a withdrawal of <strong className="text-foreground text-base">${amount}</strong>?</p>
+              
+              <div className="flex gap-3 mt-4">
+                <button 
+                  onClick={() => setShowConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border hover:bg-muted/80 transition-colors"
+                >
+                  No, Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowConfirm(false);
+                    handleSubmit();
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary hover:opacity-90 transition-opacity"
+                >
+                  Yes, Proceed
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

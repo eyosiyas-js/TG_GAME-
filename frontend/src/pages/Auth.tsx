@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Phone, Lock, Eye, EyeOff, Gamepad2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { sounds } from "@/components/game/AnimationEffects";
 
@@ -11,7 +11,7 @@ const Auth = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>("login");
   const [showPassword, setShowPassword] = useState(false);
-  const [username, setUsername] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -24,23 +24,32 @@ const Auth = () => {
 
     try {
       if (mode === "login") {
-        const response = await api.post("/auth/login", { username, password });
+        const response = await api.post("/auth/login", { phoneNumber, password });
         localStorage.setItem("token", response.access_token);
         localStorage.setItem("user", JSON.stringify(response.user));
         localStorage.setItem("userId", response.user.id);
-        localStorage.setItem("username", response.user.username);
+        if (response.user.phoneNumber) {
+          localStorage.setItem("phoneNumber", response.user.phoneNumber);
+        }
         sounds.win();
-        navigate("/");
+
+        if (response.user.username) {
+          localStorage.setItem("username", response.user.username);
+          navigate("/");
+        } else {
+          navigate("/choose-username");
+        }
       } else if (mode === "signup") {
-        const response = await api.post("/auth/register", { username, password });
+        const response = await api.post("/auth/register", { phoneNumber, password });
         localStorage.setItem("token", response.access_token);
         localStorage.setItem("user", JSON.stringify(response.user));
         localStorage.setItem("userId", response.user.id);
-        localStorage.setItem("username", response.user.username);
+        if (response.user.phoneNumber) {
+          localStorage.setItem("phoneNumber", response.user.phoneNumber);
+        }
         sounds.win();
-        navigate("/");
+        navigate("/choose-username");
       } else if (mode === "forgot") {
-        // Placeholder for forgot password
         setTimeout(() => {
           setLoading(false);
           setMessage("Password reset functionality is not implemented yet.");
@@ -123,15 +132,15 @@ const Auth = () => {
         >
           <div className="space-y-1.5">
             <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider">
-              Username
+              Phone Number
             </label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="Enter your phone number"
                 required
                 className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted border border-border text-foreground font-body text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground"
               />
@@ -178,7 +187,7 @@ const Auth = () => {
             </button>
           )}
 
-          {/* Success Message */}
+          {/* Error/Info Message */}
           <AnimatePresence>
             {message && (
               <motion.div

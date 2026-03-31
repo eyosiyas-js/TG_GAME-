@@ -8,17 +8,20 @@ datasource db {
 
 model User {
   id            String    @id @default(uuid())
-  username      String    @unique
+  username      String?   @unique
+  phoneNumber   String    @unique
   passwordHash  String
   avatar        String?
   level         Int       @default(1)
   exp           Int       @default(0)
   isBanned      Boolean   @default(false)
-  wallet        Wallet?
-  matches       MatchParticipant[]
-  moves         MatchMove[]
-  transactions  Transaction[]
-  notifications Notification[]
+  wallet          Wallet?
+  matches         MatchParticipant[]
+  moves           MatchMove[]
+  transactions    Transaction[]
+  notifications   Notification[]
+  depositRequests    DepositRequest[]
+  withdrawalRequests WithdrawalRequest[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -106,6 +109,38 @@ enum TransactionType {
   WIN
   COMMISSION
   TRANSFER
+}
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model DepositRequest {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  amount        Decimal       @db.Decimal(12, 2)
+  method        String
+  senderName    String
+  transactionId String?
+  receiptUrl    String
+  status        DepositStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model WithdrawalRequest {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  amount      Decimal       @db.Decimal(12, 2)
+  method      String
+  phoneNumber String
+  status      DepositStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model Notification {

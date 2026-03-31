@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle2, X } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle2, X, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
@@ -15,10 +15,11 @@ const DepositPage = () => {
   const [amount, setAmount] = useState("");
   const [paymentId, setPaymentId] = useState("");
   const [senderName, setSenderName] = useState("");
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<File | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [settings, setSettings] = useState<any>({});
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     api.get("/admin/settings").then(data => setSettings(data)).catch(console.error);
@@ -26,15 +27,23 @@ const DepositPage = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setReceipt(file.name);
+    if (file) setReceipt(file);
   };
 
   const handleSubmit = async () => {
-    if (amount && method && paymentId) {
+    if (amount && method && senderName && receipt) {
       try {
         const token = localStorage.getItem("token");
         if (!token) throw new Error("No token found");
-        await api.post("/wallet/deposit", { amount: Number(amount), senderName }, token);
+        
+        const formData = new FormData();
+        formData.append("amount", amount);
+        formData.append("method", method);
+        formData.append("senderName", senderName);
+        if (paymentId) formData.append("transactionId", paymentId);
+        formData.append("receipt", receipt);
+
+        await api.post("/wallet/deposit", formData, token);
         setSubmitted(true);
       } catch (err: any) {
         alert(err.message);
@@ -223,23 +232,21 @@ const DepositPage = () => {
         </motion.div>
       )}
 
-      {/* Receipt Upload */}
       {method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Receipt (Optional)</label>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Receipt (Required)</label>
           <label className="card-game rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer border-2 border-dashed border-border hover:border-primary/50 transition-colors">
             <Upload className="w-6 h-6 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{receipt || "Tap to upload receipt"}</span>
-            <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+            <span className="text-xs text-muted-foreground">{receipt?.name || "Tap to upload receipt (Image/PDF)"}</span>
+            <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
           </label>
         </motion.div>
       )}
 
-      {/* Submit */}
       <motion.button
         whileTap={{ scale: 0.97 }}
-        onClick={handleSubmit}
-        disabled={!amount || !method || !paymentId || !senderName}
+        onClick={() => setShowConfirm(true)}
+        disabled={!amount || !method || !senderName || !receipt}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
         Submit Deposit
@@ -269,6 +276,51 @@ const DepositPage = () => {
                 <X className="w-6 h-6" />
               </button>
               <img src={selectedImage} alt="Fullscreen guide" className="w-full h-auto rounded-xl border border-white/20 shadow-2xl" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowConfirm(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="card-game rounded-2xl p-6 max-w-sm w-full text-center relative overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 hover:scale-105 transition-transform cursor-default">
+                <AlertCircle className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-display font-bold text-foreground mb-2">Confirm Deposit</h3>
+              <p className="text-sm text-muted-foreground mb-6">Are you sure you want to proceed with a deposit of <strong className="text-foreground text-base">${amount}</strong>?</p>
+              
+              <div className="flex gap-3 mt-4">
+                <button 
+                  onClick={() => setShowConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border hover:bg-muted/80 transition-colors"
+                >
+                  No, Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowConfirm(false);
+                    handleSubmit();
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary hover:opacity-90 transition-opacity"
+                >
+                  Yes, Proceed
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

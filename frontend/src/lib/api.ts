@@ -29,7 +29,8 @@ export const api = {
   },
 
   async post(endpoint: string, body: any, token?: string) {
-    const headers: HeadersInit = {
+    const isFormData = body instanceof FormData;
+    const headers: HeadersInit = isFormData ? {} : {
       'Content-Type': 'application/json',
     };
     if (token) {
@@ -38,7 +39,7 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
     
     if (!response.ok) {
@@ -57,12 +58,13 @@ export const api = {
   },
 
   async put(endpoint: string, body: any, token?: string) {
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const isFormData = body instanceof FormData;
+    const headers: HeadersInit = isFormData ? {} : { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
     if (!response.ok) throw new Error('Something went wrong');
     return response.json();

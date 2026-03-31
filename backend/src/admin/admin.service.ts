@@ -87,6 +87,8 @@ export class AdminService {
       MatchMove: 'matchMove',
       MatchParticipant: 'matchParticipant',
       Transaction: 'transaction',
+      DepositRequest: 'depositRequest',
+      WithdrawalRequest: 'withdrawalRequest',
     };
 
     const modelName = allowedModels[tableName];
@@ -202,5 +204,100 @@ export class AdminService {
       maintenanceMode: isMaintenanceMode,
       activeMatchCount,
     };
+  }
+
+  async getAllDeposits() {
+    return (this.prisma as any).depositRequest.findMany({
+      include: {
+        user: { select: { username: true, phoneNumber: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async approveDeposit(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const deposit = await (tx as any).depositRequest.findUnique({ where: { id } });
+      if (!deposit || deposit.status !== 'PENDING') {
+        throw new Error('Deposit not found or not pending');
+      }
+
+      await (tx as any).depositRequest.update({
+        where: { id },
+        data: { status: 'APPROVED' },
+      });
+
+      await (tx as any).wallet.update({
+        where: { userId: deposit.userId },
+        data: { balance: { increment: deposit.amount } },
+      });
+
+      await (tx as any).transaction.create({
+        data: {
+          userId: deposit.userId,
+          amount: deposit.amount,
+          type: 'DEPOSIT',
+        },
+      });
+
+      return { success: true };
+    });
+  }
+
+  async rejectDeposit(id: string) {
+    return (this.prisma as any).depositRequest.update({
+      where: { id },
+      data: { status: 'REJECTED' },
+    });
+  }
+
+  async getAllWithdrawals() {
+    return (this.prisma as any).withdrawalRequest.findMany({
+      include: {
+        user: { select: { username: true, phoneNumber: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async approveWithdrawal(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const withdrawal = await (tx as any).withdrawalRequest.findUnique({ where: { id } });
+      if (!withdrawal || withdrawal.status !== 'PENDING') {
+        throw new Error('Withdrawal not found or not pending');
+      }
+
+      const wallet = await (tx as any).wallet.findUnique({ where: { userId: withdrawal.userId } });
+      if (!wallet || Number(wallet.balance) < Number(withdrawal.amount)) {
+        throw new Error('Insufficient funds');
+      }
+
+      await (tx as any).withdrawalRequest.update({
+        where: { id },
+        data: { status: 'APPROVED' },
+      });
+
+      await (tx as any).wallet.update({
+        where: { userId: withdrawal.userId },
+        data: { balance: { decrement: withdrawal.amount } },
+      });
+
+      await (tx as any).transaction.create({
+        data: {
+          userId: withdrawal.userId,
+          amount: -Number(withdrawal.amount),
+          type: 'WITHDRAW',
+        },
+      });
+
+      return { success: true };
+    });
+  }
+
+  async rejectWithdrawal(id: string) {
+    return (this.prisma as any).withdrawalRequest.update({
+      where: { id },
+      data: { status: 'REJECTED' },
+    });
   }
 }

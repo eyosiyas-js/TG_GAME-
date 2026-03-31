@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/co
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, SetUsernameDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -13,11 +13,11 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
-      where: { username: dto.username },
+      where: { phoneNumber: dto.phoneNumber },
     });
 
     if (existingUser) {
-      throw new ConflictException('Username already exists');
+      throw new ConflictException('Phone number already registered');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -25,7 +25,7 @@ export class AuthService {
     const user = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          username: dto.username,
+          phoneNumber: dto.phoneNumber,
           passwordHash,
         },
       });
@@ -40,12 +40,12 @@ export class AuthService {
       return newUser;
     });
 
-    return this.signToken(user.id, user.username);
+    return this.signToken(user.id, user.username, user.phoneNumber);
   }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
-      where: { username: dto.username },
+      where: { phoneNumber: dto.phoneNumber },
     });
 
     if (!user) {
@@ -58,7 +58,36 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.signToken(user.id, user.username);
+    return this.signToken(user.id, user.username, user.phoneNumber);
+  }
+
+  async setUsername(userId: string, dto: SetUsernameDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.username) {
+      throw new ConflictException('Username is already set');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { username: dto.username },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Username already taken');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { username: dto.username },
+    });
+
+    return this.signToken(updatedUser.id, updatedUser.username, updatedUser.phoneNumber);
   }
 
   async changeUsername(userId: string, newUsername: string) {
@@ -79,7 +108,7 @@ export class AuthService {
       data: { username: newUsername },
     });
 
-    return this.signToken(updatedUser.id, updatedUser.username);
+    return this.signToken(updatedUser.id, updatedUser.username, updatedUser.phoneNumber);
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
@@ -113,6 +142,7 @@ export class AuthService {
   async getLeaderboard() {
     const users = await this.prisma.user.findMany({
       take: 10,
+      where: { username: { not: null } },
       include: {
         wallet: true,
         _count: {
@@ -127,14 +157,14 @@ export class AuthService {
     return users.map((u, i) => ({
       rank: i + 1,
       name: u.username,
-      wins: u._count.matches, // Approximate wins
+      wins: u._count.matches,
       earnings: Number(u.wallet?.balance || 0),
-      isYou: false, // Will be handled on frontend
+      isYou: false,
     }));
   }
 
-  async signToken(userId: string, username: string) {
-    const payload = { sub: userId, username };
+  async signToken(userId: string, username: string | null, phoneNumber: string) {
+    const payload = { sub: userId, username, phoneNumber };
     const token = await this.jwt.signAsync(payload);
 
     return {
@@ -142,6 +172,7 @@ export class AuthService {
       user: {
         id: userId,
         username,
+        phoneNumber,
       },
     };
   }

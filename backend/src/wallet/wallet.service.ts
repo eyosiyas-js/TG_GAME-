@@ -18,65 +18,80 @@ export class WalletService {
     return wallet.balance;
   }
 
-  async deposit(userId: string, amount: number, senderName?: string) {
+  async createDepositRequest(
+    userId: string,
+    amount: number,
+    method: string,
+    senderName: string,
+    receiptUrl: string,
+    transactionId?: string,
+  ) {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.update({
-        where: { userId },
-        data: {
-          balance: { increment: amount },
-        },
-      });
+    if (!method || !senderName || !receiptUrl) {
+      throw new BadRequestException('Method, sender name, and receipt are required');
+    }
 
-      await tx.transaction.create({
-        data: {
-          userId,
-          amount,
-          type: 'DEPOSIT',
-        },
-      });
-
-      return wallet;
+    return this.prisma.depositRequest.create({
+      data: {
+        userId,
+        amount,
+        method,
+        senderName,
+        transactionId,
+        receiptUrl,
+        status: 'PENDING',
+      },
     });
   }
 
-  async withdraw(userId: string, amount: number) {
+  async getUserDeposits(userId: string) {
+    return this.prisma.depositRequest.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createWithdrawalRequest(userId: string, amount: number, method: string) {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({
-        where: { userId },
-      });
+    if (!method) {
+      throw new BadRequestException('Withdrawal method is required');
+    }
 
-      if (!wallet) {
-        throw new NotFoundException('Wallet not found');
-      }
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
 
-      if (new Decimal(wallet.balance.toString()).lessThan(amount)) {
-        throw new BadRequestException('Insufficient funds');
-      }
+    if (new Decimal(wallet.balance.toString()).lessThan(amount)) {
+      throw new BadRequestException('Insufficient funds');
+    }
 
-      const updatedWallet = await tx.wallet.update({
-        where: { userId },
-        data: {
-          balance: { decrement: amount },
-        },
-      });
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-      await tx.transaction.create({
-        data: {
-          userId,
-          amount: -amount,
-          type: 'WITHDRAW',
-        },
-      });
+    return (this.prisma as any).withdrawalRequest.create({
+      data: {
+        userId,
+        amount,
+        method,
+        phoneNumber: user.phoneNumber,
+        status: 'PENDING',
+      },
+    });
+  }
 
-      return updatedWallet;
+  async getUserWithdrawals(userId: string) {
+    return (this.prisma as any).withdrawalRequest.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

@@ -59,4 +59,34 @@ export class AdminController {
   getTableData(@Param('tableName') tableName: string) {
     return this.adminService.getTableData(tableName);
   }
+
+  @Get('deposits')
+  getDeposits() {
+    return this.adminService.getAllDeposits();
+  }
+
+  @Put('deposits/:id/approve')
+  approveDeposit(@Param('id') id: string) {
+    return this.adminService.approveDeposit(id);
+  }
+
+  @Put('deposits/:id/reject')
+  rejectDeposit(@Param('id') id: string) {
+    return this.adminService.rejectDeposit(id);
+  }
+
+  @Get('withdrawals')
+  getWithdrawals() {
+    return this.adminService.getAllWithdrawals();
+  }
+
+  @Put('withdrawals/:id/approve')
+  approveWithdrawal(@Param('id') id: string) {
+    return this.adminService.approveWithdrawal(id);
+  }
+
+  @Put('withdrawals/:id/reject')
+  rejectWithdrawal(@Param('id') id: string) {
+    return this.adminService.rejectWithdrawal(id);
+  }
 }

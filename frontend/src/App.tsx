@@ -16,6 +16,7 @@ import GuessMyNumber from "./pages/play/GuessMyNumber";
 import DiceBattle from "./pages/play/DiceBattle";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import ChooseUsername from "./pages/ChooseUsername";
 import NotificationsPage from "./pages/NotificationsPage";
 import DepositPage from "./pages/DepositPage";
 import WithdrawPage from "./pages/WithdrawPage";
@@ -31,6 +32,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/choose-username" element={<ChooseUsername />} />
           
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>

@@ -34,6 +34,11 @@ const ProtectedRoute = () => {
     return <Navigate to="/auth" replace />;
   }
 
+  const hasUsername = !!localStorage.getItem("username");
+  if (!hasUsername) {
+    return <Navigate to="/choose-username" replace />;
+  }
+
   return <Outlet />;
 };
 

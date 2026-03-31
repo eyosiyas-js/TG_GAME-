@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Deposits</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav a { color: #38bdf8; text-decoration: none; font-size: 1.2rem; }
+        .nav a.active { font-weight: bold; border-bottom: 2px solid #38bdf8; }
+        .card { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 0.5rem; }
+        button.danger { background: #ef4444; color: white; }
+        .receipt-link { color: #38bdf8; text-decoration: underline; cursor: pointer; }
+        .status-badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .status-badge.PENDING { background: #eab30820; color: #eab308; }
+        .status-badge.APPROVED { background: #22c55e20; color: #22c55e; }
+        .status-badge.REJECTED { background: #ef444420; color: #ef4444; }
+        
+        /* Modal Styles */
+        #receipt-modal {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+            align-items: center; justify-content: center; z-index: 50;
+        }
+        #receipt-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; }
+        #close-modal { position: absolute; top: 1rem; right: 2rem; color: white; font-size: 2rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="nav">
+        <a href="users.html">Users</a>
+        <a href="deposits.html" class="active">Deposits</a>
+        <a href="withdrawals.html">Withdrawals</a>
+        <a href="index.html">Historical Matches</a>
+        <a href="active-games.html">Active Games</a>
+        <a href="revenue.html">Revenue</a>
+        <a href="settings.html">Settings</a>
+        <a href="notifications.html">Notifications</a>
+    </div>
+
+    <div class="card">
+        <h2>Deposit Requests</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>User / Phone</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Sender Name</th>
+                    <th>Transaction ID</th>
+                    <th>Receipt</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="deposits-body">
+                <tr><td colspan="9">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="receipt-modal">
+        <span id="close-modal">&times;</span>
+        <img id="receipt-img" src="" alt="Receipt">
+    </div>
+
+    <script>
+        const modal = document.getElementById('receipt-modal');
+        const modalImg = document.getElementById('receipt-img');
+        const closeModalBtn = document.getElementById('close-modal');
+
+        function showReceipt(url) {
+            const fullUrl = `http://localhost:3005${url}`;
+            if (url.toLowerCase().endsWith('.pdf')) {
+                window.open(fullUrl, '_blank');
+            } else {
+                modalImg.src = fullUrl;
+                modal.style.display = 'flex';
+            }
+        }
+
+        closeModalBtn.onclick = () => modal.style.display = 'none';
+        modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+
+        async function loadDeposits() {
+            try {
+                const res = await fetch('http://localhost:3005/admin/deposits');
+                const deposits = await res.json();
+                const tbody = document.getElementById('deposits-body');
+                tbody.innerHTML = '';
+                
+                if (deposits.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9">No deposit requests found.</td></tr>';
+                    return;
+                }
+
+                deposits.forEach(d => {
+                    const statusBadge = `<span class="status-badge ${d.status}">${d.status}</span>`;
+                    const tr = document.createElement('tr');
+                    
+                    let actions = '';
+                    if (d.status === 'PENDING') {
+                        actions = `
+                            <button onclick="updateStatus('${d.id}', 'approve')">Approve</button>
+                            <button class="danger" onclick="updateStatus('${d.id}', 'reject')">Reject</button>
+                        `;
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${new Date(d.createdAt).toLocaleString()}</td>
+                        <td>
+                            <strong>${d.user?.username || 'No Username'}</strong><br>
+                            <span style="font-size: 0.8rem; color: #94a3b8;">${d.user?.phoneNumber}</span>
+                        </td>
+                        <td style="font-weight: bold; color: #38bdf8;">$${d.amount}</td>
+                        <td style="text-transform: uppercase;">${d.method}</td>
+                        <td>${d.senderName}</td>
+                        <td>${d.transactionId || '<i style="color: #64748b;">None</i>'}</td>
+                        <td><span class="receipt-link" onclick="showReceipt('${d.receiptUrl}')">View</span></td>
+                        <td>${statusBadge}</td>
+                        <td>${actions}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                document.getElementById('deposits-body').innerHTML = '<tr><td colspan="9" style="color: red;">Error loading deposits</td></tr>';
+            }
+        }
+
+        async function updateStatus(id, action) {
+            if (!confirm(`Are you sure you want to ${action} this deposit?`)) return;
+            
+            try {
+                const res = await fetch(`http://localhost:3005/admin/deposits/${id}/${action}`, {
+                    method: 'PUT'
+                });
+                if (!res.ok) throw new Error(await res.text());
+                loadDeposits();
+            } catch (e) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+
+        loadDeposits();
+    </script>
+</body>
+</html>
