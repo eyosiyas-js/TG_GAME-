@@ -34,7 +34,7 @@ export class WalletService {
       throw new BadRequestException('Method, sender name, and receipt are required');
     }
 
-    return this.prisma.depositRequest.create({
+    return (this.prisma as any).depositRequest.create({
       data: {
         userId,
         amount,
@@ -48,7 +48,7 @@ export class WalletService {
   }
 
   async getUserDeposits(userId: string) {
-    return this.prisma.depositRequest.findMany({
+    return (this.prisma as any).depositRequest.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
@@ -82,7 +82,7 @@ export class WalletService {
         userId,
         amount,
         method,
-        phoneNumber: user.phoneNumber,
+        phoneNumber: (user as any).phoneNumber,
         status: 'PENDING',
       },
     });
@@ -149,14 +149,40 @@ export class WalletService {
       });
 
       await tx.transaction.create({
-        data: { userId: senderId, amount: -amount, type: 'TRANSFER' },
+        data: { userId: senderId, amount: -amount, type: 'TRANSFER' as any },
       });
       
       await tx.transaction.create({
-        data: { userId: receiver.id, amount, type: 'TRANSFER' },
+        data: { userId: receiver.id, amount, type: 'TRANSFER' as any },
       });
 
       return updatedSenderWallet;
+    });
+  }
+
+  async addBalance(userId: string, amount: number, notes: string = 'Adjustment') {
+    return this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.update({
+        where: { userId },
+        data: { balance: { increment: amount } },
+      });
+      await tx.transaction.create({
+        data: { userId, amount, type: 'DEPOSIT' as any, status: 'APPROVED', notes } as any,
+      });
+      return wallet;
+    });
+  }
+
+  async subtractBalance(userId: string, amount: number, notes: string = 'Adjustment') {
+    return this.prisma.$transaction(async (tx: any) => {
+      const wallet = await tx.wallet.update({
+        where: { userId },
+        data: { balance: { decrement: amount } },
+      });
+      await tx.transaction.create({
+        data: { userId, amount: -amount, type: 'WITHDRAW' as any, status: 'APPROVED', notes } as any,
+      });
+      return wallet;
     });
   }
 

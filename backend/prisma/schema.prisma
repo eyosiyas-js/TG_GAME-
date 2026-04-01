@@ -14,6 +14,8 @@ model User {
   avatar        String?
   level         Int       @default(1)
   exp           Int       @default(0)
+  isBot         Boolean   @default(false)
+  botConfig     Json?     // { minDelay, maxDelay, winRate, maxConcurrentGames, preferredStakes }
   isBanned      Boolean   @default(false)
   wallet          Wallet?
   matches         MatchParticipant[]
@@ -50,6 +52,7 @@ model Match {
   participants MatchParticipant[]
   moves        MatchMove[]
   transactions Transaction[]
+  botGameState BotGameState?
   createdAt    DateTime           @default(now())
   endedAt      DateTime?
 }
@@ -170,4 +173,19 @@ model AuditLog {
 
   @@index([apiKey])
   @@index([createdAt])
+}
+model BotGameState {
+  id              String   @id @default(uuid())
+  matchId         String   @unique
+  userId          String
+  winningNumbers  Int[]
+  calledNumbers   Int[]
+  moveCount       Int      @default(0)
+  strategy        String   @default("OPTIMAL")
+  nextMoveAt      DateTime?
+  isWinning       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id])
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, UseGuards, Req, Ip, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Req, Ip, Query } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/admin-api-key.guard';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
@@ -55,8 +55,8 @@ export class AdminController {
 
   // ===================== DEPOSIT MANAGEMENT =====================
   @Get('deposits')
-  getDeposits(@Query('page') page = 1, @Query('limit') limit = 50) {
-    return this.adminService.getAllDeposits(Number(page), Number(limit));
+  getDeposits(@Query('page') page = 1, @Query('limit') limit = 50, @Query('status') status?: string) {
+    return this.adminService.getAllDeposits(Number(page), Number(limit), status);
   }
 
   @Get('deposits/:id')
@@ -76,9 +76,10 @@ export class AdminController {
 
   // ===================== WITHDRAWAL MANAGEMENT =====================
   @Get('withdrawals')
-  getWithdrawals(@Query('page') page = 1, @Query('limit') limit = 50) {
-    return this.adminService.getAllWithdrawals(Number(page), Number(limit));
+  getWithdrawals(@Query('page') page = 1, @Query('limit') limit = 50, @Query('status') status?: string) {
+    return this.adminService.getAllWithdrawals(Number(page), Number(limit), status);
   }
+
 
   @Get('withdrawals/:id')
   getWithdrawalDetails(@Param('id') id: string) {
@@ -209,5 +210,56 @@ export class AdminController {
     dto.body = body.message;
     dto.targetUsers = 'all';
     return this.adminService.sendNotification(dto, req.apiKey, ip);
+  }
+
+  // ===================== BOT MANAGEMENT =====================
+  @Get('bots/stats')
+  getBotStats() {
+    return this.adminService.getBotStats();
+  }
+
+  @Post('bots/spawn')
+  spawnBots(@Body('count') count: number, @Body('type') type: string, @Body('gameType') gameType: string) {
+    return this.adminService.spawnBots(count || 5, type || 'NORMAL', gameType || 'BINGO');
+  }
+
+  @Get('bots/system/status')
+  getBotSystemStatus() {
+    return this.adminService.getBotSystemStatus();
+  }
+
+  @Post('bots/system/start')
+  startBotSystem(@Req() req: any, @Ip() ip: string) {
+    return this.adminService.startBotSystem(req.apiKey, ip);
+  }
+
+  @Post('bots/system/stop')
+  stopBotSystem(@Req() req: any, @Ip() ip: string) {
+    return this.adminService.stopBotSystem(req.apiKey, ip);
+  }
+
+  @Put('bots/:id/config')
+  updateBotConfig(
+    @Param('id') id: string,
+    @Body() config: any,
+    @Req() req: any,
+    @Ip() ip: string,
+  ) {
+    return this.adminService.updateBotConfig(id, config, req.apiKey, ip);
+  }
+
+  @Delete('bots/:id')
+  deleteBot(@Param('id') id: string, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.deleteBot(id, req.apiKey, ip);
+  }
+
+  @Post('bots/:id/start')
+  startBot(@Param('id') id: string, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.setBotActiveStatus(id, true, req.apiKey, ip);
+  }
+
+  @Post('bots/:id/stop')
+  stopBot(@Param('id') id: string, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.setBotActiveStatus(id, false, req.apiKey, ip);
   }
 }

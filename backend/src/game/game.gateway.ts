@@ -7,9 +7,11 @@ import {
   OnGatewayDisconnect,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { Inject, forwardRef } from '@nestjs/common';
 import { GameService } from './game.service';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
 import { GameType } from '@prisma/client';
 
 interface RoomPlayer {
@@ -62,8 +64,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private chatMessages: Map<string, any[]> = new Map();
 
   constructor(
+    @Inject(forwardRef(() => GameService))
     private gameService: GameService,
     private jwtService: JwtService,
+    private prisma: PrismaService,
   ) {}
 
   /** Returns only non-forfeited participants for a Bingo match */
@@ -917,7 +921,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Helper: initialize Bingo game state and emit events to all players
   private async initAndStartBingoGame(matchId: string, participants: any[], stake: number) {
     const playerIds = participants.map((p: any) => p.userId);
-    const bingoState = this.gameService.initBingoGame(matchId, playerIds);
+    const bingoState = await this.gameService.initBingoGame(matchId, playerIds);
     const firstTurn = bingoState.turnOrder[0];
 
     console.log(`[BINGO] Game ${matchId} initialized. Turn order: ${bingoState.turnOrder.join(', ')}. First turn: ${firstTurn}`);
@@ -1087,6 +1091,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
+      console.log(`[GATEWAY] joinQueue event from ${userId} for ${data.gameType} stake ${data.stake}`);
       const result = await this.gameService.joinQueue(userId, data.gameType, data.stake);
 
       if (!result) {
@@ -1731,5 +1736,105 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Broadcast to everyone in that specific chat room
     this.server.to(`chat:${data.channel}`).emit('chatMessage', { channel: data.channel, message });
+  }
+
+  getPublicRooms() {
+    return Array.from(this.rooms.values()).filter(r => r.isPublic);
+  }
+
+  async joinQueueByBot(botId: string, gameType: GameType, stake: number) {
+    try {
+      const result = await this.gameService.joinQueue(botId, gameType, stake);
+      if (!result) return;
+
+      if (result.filling) {
+        const key = result.key;
+        const queuedIds = this.gameService.getBingoQueue(key);
+        queuedIds.forEach(id => {
+          this.server.to(id).emit('bingoQueueUpdate', { playerCount: queuedIds.length, maxPlayers: 4 });
+        });
+
+        this.gameService.startBingoFillTimer(key, async (playerIds: string[]) => {
+          try {
+            const match = await this.gameService.createBingoMatch(playerIds, stake);
+            const participants = (match as any).participants || [];
+            participants.forEach((p: any) => {
+              this.activeMatches.set(p.userId, match.id);
+            });
+
+            const allPlayers = participants.map((p: any) => ({
+              userId: p.userId,
+              username: p.user?.username || 'Player',
+              level: p.user?.level || 1,
+              avatar: p.user?.avatar || null,
+            }));
+
+            participants.forEach((p: any) => {
+              const others = participants.filter((pp: any) => pp.userId !== p.userId);
+              this.server.to(p.userId).emit('matchFound', {
+                matchId: match.id,
+                gameType: match.gameType,
+                stake: Number(match.stake),
+                yourName: p.user?.username || 'You',
+                yourLevel: p.user?.level || 1,
+                opponentName: others[0]?.user?.username || 'Opponent',
+                opponentLevel: others[0]?.user?.level || 1,
+                allPlayers,
+              });
+            });
+
+            await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+          } catch (e) {
+            console.error('[GATEWAY] Bot timer match creation failed', e);
+          }
+        });
+      } else if (result.matchType) {
+        const match = result;
+        const participants = (match as any).participants || [];
+        participants.forEach((p: any) => {
+          this.activeMatches.set(p.userId, match.id);
+        });
+
+        const allPlayers = participants.map((p: any) => ({
+          userId: p.userId,
+          username: p.user?.username || 'Player',
+          level: p.user?.level || 1,
+          avatar: p.user?.avatar || null,
+        }));
+
+        participants.forEach((p: any) => {
+          const others = participants.filter((pp: any) => pp.userId !== p.userId);
+          this.server.to(p.userId).emit('matchFound', {
+            matchId: match.id,
+            gameType: match.gameType,
+            stake: Number(match.stake),
+            yourName: p.user?.username || 'You',
+            yourLevel: p.user?.level || 1,
+            opponentName: others[0]?.user?.username || 'Opponent',
+            opponentLevel: others[0]?.user?.level || 1,
+            allPlayers,
+          });
+        });
+
+        if (match.gameType === 'BINGO') {
+          await this.initAndStartBingoGame(match.id, participants, Number(match.stake));
+        } else if (match.gameType === 'DICE') {
+          this.gameService.initDiceGame(match.id, participants[0].userId, participants[1].userId);
+        }
+      }
+    } catch (e) {
+      console.error('[GATEWAY] Bot queue assign error', e);
+    }
+  }
+
+  joinRoomByBot(roomId: string, userId: string, username: string) {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    if (room.players.length >= room.maxPlayers) return false;
+    if (room.players.find(p => p.userId === userId)) return false;
+
+    room.players.push({ userId, username, isReady: true });
+    this.broadcastRoomUpdate(room);
+    return true;
   }
 }
