@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Req, Ip, Qu
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/admin-api-key.guard';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
-import { UpdateUserBanDto, ApproveDepositDto, RejectDepositDto, UpdateSettingDto, SendNotificationDto } from './dto/admin.dto';
+import { UpdateUserBanDto, ApproveDepositDto, RejectDepositDto, UpdateSettingDto, SendNotificationDto, UpdateUserBalanceDto } from './dto/admin.dto';
 
 @Controller('admin/api')
 @UseGuards(ThrottlerGuard, AdminApiKeyGuard)
@@ -41,6 +41,11 @@ export class AdminController {
   @Put('users/:id/ban')
   updateUserBan(@Param('id') id: string, @Body() body: UpdateUserBanDto, @Req() req: any, @Ip() ip: string) {
     return this.adminService.updateUserBan(id, body.isBanned, req.apiKey, ip);
+  }
+
+  @Put('users/:id/balance')
+  updateUserBalance(@Param('id') id: string, @Body() body: UpdateUserBalanceDto, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.updateUserBalance(id, body.balance, req.apiKey, ip);
   }
 
   @Get('users/:id/activity')
@@ -94,6 +99,12 @@ export class AdminController {
   @Put('withdrawals/:id/reject')
   rejectWithdrawal(@Param('id') id: string, @Body('reason') reason: string, @Req() req: any, @Ip() ip: string) {
     return this.adminService.rejectWithdrawal(id, reason, req.apiKey, ip);
+  }
+
+  // ===================== UNIFIED TRANSACTIONS =====================
+  @Get('transactions')
+  getAllTransactions(@Query('page') page = 1, @Query('limit') limit = 50, @Query('status') status?: string) {
+    return this.adminService.getAllTransactions(Number(page), Number(limit), status);
   }
 
   // ===================== MATCH HISTORY =====================
@@ -158,6 +169,14 @@ export class AdminController {
     return this.adminService.getDetailedRevenue(period, startDate, endDate);
   }
 
+  @Get('reports/finances')
+  getFinancialReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.adminService.getFinancialReport(startDate, endDate);
+  }
+
   @Get('revenue/trends')
   getRevenueTrends(
     @Query('days') days?: string,
@@ -203,6 +222,11 @@ export class AdminController {
     return this.adminService.getNotificationHistory(Number(page), Number(limit));
   }
 
+  @Get('notifications/admin/users')
+  getAdminUsersForNotifications() {
+    return this.adminService.getUsersForNotifications();
+  }
+
   @Post('notifications/broadcast')
   broadcastNotification(@Body() body: { title: string; message: string }, @Req() req: any, @Ip() ip: string) {
     const dto = new SendNotificationDto();
@@ -226,6 +250,16 @@ export class AdminController {
   @Get('bots/system/status')
   getBotSystemStatus() {
     return this.adminService.getBotSystemStatus();
+  }
+
+  @Get('bots/target-counts')
+  getBotTargetCounts() {
+    return this.adminService.getBotTargetCounts();
+  }
+
+  @Post('bots/target-counts')
+  updateBotTargetCounts(@Body() body: Record<string, number>, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.updateBotTargetCounts(body, req.apiKey, ip);
   }
 
   @Post('bots/system/start')

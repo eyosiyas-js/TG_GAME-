@@ -98,8 +98,10 @@ export class AdminService {
   // ===================== USER MANAGEMENT =====================
   async getAllUsers(page: number, limit: number) {
     const { skip, take } = this.paginate(page, limit);
-    const total = await (this.prisma as any).user.count();
+    const where = { isBot: false };
+    const total = await (this.prisma as any).user.count({ where });
     const data = await (this.prisma as any).user.findMany({
+      where,
       skip,
       take,
       include: { wallet: true },
@@ -135,8 +137,33 @@ export class AdminService {
       where: { id },
       data: { isBanned },
     });
+
+    if (isBanned) {
+      try {
+        await (this.gameService as any).forceDisconnectUser(id);
+      } catch (e) {
+        console.error(`[ADMIN_SERVICE] Failed to force disconnect banned user ${id}:`, e);
+      }
+    }
+
     await this.logAction(apiKey, isBanned ? 'BAN_USER' : 'UNBAN_USER', id, null, ip);
     return user;
+  }
+
+  async updateUserBalance(id: string, balance: number, apiKey: string, ip: string) {
+    const user = await (this.prisma as any).user.findUnique({
+      where: { id },
+      include: { wallet: true }
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const result = await (this.prisma as any).wallet.update({
+      where: { userId: id },
+      data: { balance },
+    });
+
+    await this.logAction(apiKey, 'UPDATE_USER_BALANCE', id, { oldBalance: user.wallet?.balance, newBalance: balance }, ip);
+    return result;
   }
 
   async getUserActivity(id: string) {
@@ -297,6 +324,34 @@ export class AdminService {
     });
     await this.logAction(apiKey, 'REJECT_WITHDRAWAL', id, { reason }, ip);
     return withdrawal;
+  }
+
+  async getAllTransactions(page: number, limit: number, status?: string) {
+    const { skip, take } = this.paginate(page, limit);
+    const where: any = {};
+    if (status) where.status = status;
+
+    const total = await (this.prisma as any).transaction.count({ where });
+    const data = await (this.prisma as any).transaction.findMany({
+      where,
+      skip,
+      take,
+      include: { user: { select: { username: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { 
+      data: data.map((t: any) => ({
+        id: t.id,
+        userId: t.userId,
+        username: t.user?.username,
+        amount: Number(t.amount),
+        type: t.type,
+        status: t.status,
+        createdAt: t.createdAt
+      })), 
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } 
+    };
   }
 
   // ===================== MATCH HISTORY =====================
@@ -548,6 +603,43 @@ export class AdminService {
     };
   }
 
+  async getFinancialReport(startDate?: string, endDate?: string) {
+    const { start, end } = this.getPeriodDates('all', startDate, endDate);
+    
+    const [deposits, withdrawals, commissions] = await Promise.all([
+      (this.prisma as any).transaction.aggregate({
+        where: { type: 'DEPOSIT', status: 'APPROVED', createdAt: { gte: start, lte: end } },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      (this.prisma as any).transaction.aggregate({
+        where: { type: 'WITHDRAW', status: 'APPROVED', createdAt: { gte: start, lte: end } },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      (this.prisma as any).transaction.aggregate({
+        where: { type: 'COMMISSION', createdAt: { gte: start, lte: end } },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const totalDeposited = Number(deposits._sum.amount || 0);
+    const totalWithdrawn = Math.abs(Number(withdrawals._sum.amount || 0));
+    const totalCommission = Number(commissions._sum.amount || 0);
+
+    return {
+      period: { start: start.toISOString(), end: end.toISOString() },
+      summary: {
+        totalDeposited,
+        totalWithdrawn,
+        netRevenue: totalDeposited - totalWithdrawn,
+        netProfit: totalCommission, // User: net profit is the commission
+        depositCount: deposits._count,
+        withdrawalCount: withdrawals._count,
+      },
+    };
+  }
+
   // ===================== SYSTEM SETTINGS =====================
   async getSettings() {
     const settings = await (this.prisma as any).systemSetting.findMany();
@@ -597,6 +689,14 @@ export class AdminService {
     return { success: true, sentCount: users.length };
   }
 
+  async getUsersForNotifications() {
+    const users = await (this.prisma as any).user.findMany({
+      where: { isBot: false },
+      select: { id: true, username: true }
+    });
+    return users;
+  }
+
   async getNotificationHistory(page: number, limit: number) {
     const { skip, take } = this.paginate(page, limit);
     const total = await (this.prisma as any).notification.count({ where: { type: 'ADMIN_BROADCAST' }});
@@ -635,12 +735,50 @@ export class AdminService {
     return result;
   }
 
+  // ===================== BOT TARGET COUNTS =====================
+  async getBotTargetCounts() {
+    const settings = await (this.prisma as any).systemSetting.findMany({
+      where: { key: { startsWith: 'BOT_TARGET_COUNT_' } }
+    });
+    
+    // Default values if settings not found
+    const targets: Record<string, number> = {
+      'BINGO_NORMAL': 4,
+      'BINGO_CHEATER': 4,
+      'RPS_NORMAL': 4,
+      'RPS_CHEATER': 4,
+      'DICE_NORMAL': 4,
+      'DICE_CHEATER': 4
+    };
+
+    settings.forEach((s: any) => {
+      const gameTypeKey = s.key.replace('BOT_TARGET_COUNT_', '');
+      targets[gameTypeKey] = parseInt(s.value);
+    });
+
+    return targets;
+  }
+
+  async updateBotTargetCounts(targets: Record<string, number>, apiKey: string, ip: string) {
+    const results: any[] = [];
+    for (const [gameTypeKey, count] of Object.entries(targets)) {
+      const key = `BOT_TARGET_COUNT_${gameTypeKey}`;
+      results.push(await this.updateSetting(key, count.toString(), apiKey, ip));
+    }
+    return { success: true, updated: results.length };
+  }
+
   getBotSystemStatus() {
     return (this.gameService as any).getBotSystemStatus();
   }
 
   async startBotSystem(apiKey: string, ip: string) {
     try {
+      await this.prisma.$executeRawUnsafe(`
+        UPDATE "User"
+        SET "botConfig" = jsonb_set("botConfig", '{enabled}', 'true')
+        WHERE "isBot" = true
+      `);
       await (this.gameService as any).startBotSystem();
       await this.logAction(apiKey, 'START_BOT_SYSTEM', 'ALL', null, ip);
       return { success: true };
@@ -652,6 +790,11 @@ export class AdminService {
 
   async stopBotSystem(apiKey: string, ip: string) {
     try {
+      await this.prisma.$executeRawUnsafe(`
+        UPDATE "User"
+        SET "botConfig" = jsonb_set("botConfig", '{enabled}', 'false')
+        WHERE "isBot" = true
+      `);
       await (this.gameService as any).stopBotSystem();
       await this.logAction(apiKey, 'STOP_BOT_SYSTEM', 'ALL', null, ip);
       return { success: true };
@@ -660,5 +803,4 @@ export class AdminService {
       throw e;
     }
   }
-
 }

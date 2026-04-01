@@ -25,9 +25,21 @@ export class BotPoolManager implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('BotPoolManager initialized');
-    await this.ensureBotsExist(5, 'NORMAL', 'BINGO');
-    await this.ensureBotsExist(4, 'NORMAL', 'RPS');
-    await this.ensureBotsExist(4, 'CHEATER', 'RPS');
+    
+    // Automated Bot Provisioning
+    const gameTypes = ['BINGO', 'RPS', 'DICE'];
+    const botTypes = ['NORMAL', 'CHEATER'];
+
+    for (const gameType of gameTypes) {
+      for (const botType of botTypes) {
+        // Fetch target from settings or use default (4 each)
+        const key = `BOT_TARGET_COUNT_${gameType}_${botType}`;
+        const setting = await (this.prisma as any).systemSetting.findUnique({ where: { key } });
+        const targetCount = setting ? parseInt(setting.value) : 4;
+        
+        await this.ensureBotsExist(targetCount, botType, gameType);
+      }
+    }
 
     // Generic Match Start Listener for all game types
     this.gameService.onMatchStart(async (matchId, playerIds, gameType) => {
@@ -61,7 +73,7 @@ export class BotPoolManager implements OnModuleInit {
     }
   }
 
-  private async spawnBot(botType: string = 'NORMAL', gameType: string = 'BINGO') {
+  async spawnBot(botType: string = 'NORMAL', gameType: string = 'BINGO') {
     const id = `bot_${Math.random().toString(36).slice(2, 9)}`;
     const bot = await this.prisma.user.create({
       data: {
@@ -87,6 +99,15 @@ export class BotPoolManager implements OnModuleInit {
     });
     
     return bot;
+  }
+
+  async addBots(count: number, botType: string, gameType: string) {
+    this.logger.log(`Manually adding ${count} new bots of type ${botType} for ${gameType}...`);
+    const results: any[] = [];
+    for (let i = 0; i < count; i++) {
+        results.push(await this.spawnBot(botType, gameType));
+    }
+    return results;
   }
 
 
@@ -261,13 +282,21 @@ export class BotPoolManager implements OnModuleInit {
     const existing = await this.prisma.user.findUnique({ where: { id: botId } });
     if (!existing || !existing.isBot) throw new Error('Bot not found');
     
-    // Soft-delete to preserve match history foreign keys
-    await this.prisma.user.update({
-      where: { id: botId },
-      data: { isBot: false, username: `deleted_${botId.slice(0, 8)}` }
-    });
+    // Permanent Hard-Delete including all relations
+    await this.prisma.$transaction([
+      (this.prisma as any).matchMove.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).matchParticipant.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).botGameState?.deleteMany({ where: { userId: botId } }) || Promise.resolve(),
+      (this.prisma as any).transaction.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).depositRequest.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).withdrawalRequest.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).notification.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).wallet.deleteMany({ where: { userId: botId } }),
+      (this.prisma as any).user.delete({ where: { id: botId } }),
+    ].filter(p => !!p));
+
     this.activeBots.delete(botId);
-    return { success: true, message: `Bot soft-deleted successfully` };
+    return { success: true, message: `Bot permanently deleted from database` };
   }
 
   async setBotActiveStatus(botId: string, enabled: boolean) {

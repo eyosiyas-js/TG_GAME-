@@ -46,3 +46,7 @@ export class SendNotificationDto {
   @IsOptional()
   data?: any;
 }
+export class UpdateUserBalanceDto {
+  @IsNumber()
+  balance: number;
+}

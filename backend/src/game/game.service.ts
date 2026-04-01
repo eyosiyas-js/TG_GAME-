@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { GameType } from '@prisma/client';
 import { BotPoolManager } from './bot-pool.manager';
+import { GameGateway } from './game.gateway';
 
 export interface DiceState {
   p1: string;
@@ -44,6 +45,8 @@ export class GameService {
     private walletService: WalletService,
     @Inject(forwardRef(() => BotPoolManager))
     private botPoolManager: BotPoolManager,
+    @Inject(forwardRef(() => GameGateway))
+    private gameGateway: GameGateway,
   ) {}
 
   async getSetting(key: string, defaultValue: string) {
@@ -222,6 +225,12 @@ export class GameService {
   }
 
   async joinQueue(userId: string, gameType: GameType, stake: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isBanned: true }
+    });
+    if (user?.isBanned) throw new Error('Your account is banned');
+
     // BINGO uses a special queue with 10s fill window
     if (gameType === 'BINGO') {
       return this.joinBingoQueue(userId, stake);
@@ -262,6 +271,12 @@ export class GameService {
     userId: string,
     stake: number,
   ): Promise<any> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isBanned: true }
+    });
+    if (user?.isBanned) throw new Error('Your account is banned');
+
     const key = `BINGO_${stake}`;
     if (!this.queues.has(key)) {
       this.queues.set(key, []);
@@ -618,7 +633,7 @@ export class GameService {
   }
 
   async spawnBots(count: number, type: string = 'NORMAL', gameType: string = 'BINGO') {
-    return this.botPoolManager.ensureBotsExist(count, type, gameType);
+    return this.botPoolManager.addBots(count, type, gameType);
   }
 
   async updateBotConfig(botId: string, config: any) {
@@ -637,12 +652,12 @@ export class GameService {
     return this.botPoolManager.getIsActive();
   }
 
-  async startBotSystem() {
-    await this.botPoolManager.start();
-  }
-
   async stopBotSystem() {
     await this.botPoolManager.stop();
+  }
+
+  async forceDisconnectUser(userId: string) {
+    await this.gameGateway.forceDisconnectUser(userId);
   }
 
 

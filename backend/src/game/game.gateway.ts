@@ -63,6 +63,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Chat system
   private chatMessages: Map<string, any[]> = new Map();
 
+  async forceDisconnectUser(userId: string) {
+    this.server.to(userId).emit('banned', { message: 'Your account has been banned' });
+    const sockets = await this.server.in(userId).fetchSockets();
+    sockets.forEach(s => s.disconnect());
+  }
+
   constructor(
     @Inject(forwardRef(() => GameService))
     private gameService: GameService,
@@ -128,6 +134,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!auth) return socket.disconnect();
 
       const payload = await this.jwtService.verifyAsync(auth, { secret: process.env.JWT_SECRET || 'super-secret' });
+      
+      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+      if (!user || user.isBanned) {
+        return socket.disconnect();
+      }
+
       socket.data.user = { userId: payload.sub, username: payload.username };
       socket.join(payload.sub);
 
