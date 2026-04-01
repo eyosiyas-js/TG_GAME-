@@ -399,7 +399,7 @@ const BingoGame = () => {
           <span className="text-5xl">🎱</span>
         </motion.div>
         <h2 className="text-2xl font-display font-bold text-foreground mb-2">Searching...</h2>
-        <p className="text-muted-foreground text-sm mb-4">Looking for a Bingo match with a ${stake} stake...</p>
+        <p className="text-muted-foreground text-sm mb-4">Looking for a Bingo match with a {stake} ETB stake...</p>
 
         {queuePlayerCount >= 2 && (
           <motion.div
@@ -449,17 +449,17 @@ const BingoGame = () => {
             </h2>
             {isWinner && matchResult?.commission ? (
               <div className="bg-background/50 border border-border rounded-xl p-3 mt-3 w-56 text-left space-y-1.5 flex flex-col">
-                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>${stake}</span></div>
-                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>${stake * playerCount}</span></div>
+                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>{stake} ETB</span></div>
+                <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>{stake * playerCount} ETB</span></div>
                 <div className="flex justify-between text-xs text-destructive font-display">
                   <span>Commission ({Math.round((matchResult.commission / (stake * playerCount)) * 100)}%):</span> 
-                  <span>-${matchResult.commission}</span>
+                  <span>-{matchResult.commission} ETB</span>
                 </div>
                 <div className="h-px bg-border my-1 w-full" />
-                <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+${matchResult.winAmount - stake}</span></div>
+                <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{matchResult.winAmount - stake} ETB</span></div>
               </div>
             ) : (
-              <p className="text-muted-foreground mt-1">{isWinner ? `Won +$${matchResult?.winAmount ? matchResult.winAmount - stake : stake * (playerCount - 1)}!` : `Lost -$${stake}`}</p>
+              <p className="text-muted-foreground mt-1">{isWinner ? `Won +${matchResult?.winAmount ? matchResult.winAmount - stake : stake * (playerCount - 1)} ETB!` : `Lost -${stake} ETB`}</p>
             )}
             {matchResult?.reason === "opponent_timeout" && (
               <p className="text-xs text-primary mt-1">Opponent ran out of time!</p>
@@ -577,7 +577,7 @@ const BingoGame = () => {
               </div>
               <p className="text-sm text-muted-foreground mb-6">
                 Leaving during a match will count as a <span className="text-destructive font-bold">loss</span>. 
-                Your stake of <span className="font-bold text-foreground">${stake}</span> will be forfeited.
+                Your stake of <span className="font-bold text-foreground">{stake} ETB</span> will be forfeited.
               </p>
               <div className="flex gap-3">
                 <motion.button
@@ -665,7 +665,7 @@ const BingoGame = () => {
             </motion.button>
             <div>
               <h1 className="text-lg font-display font-bold text-foreground">🎱 Bingo</h1>
-              <p className="text-xs text-primary font-display font-semibold">${stake} stake • {allPlayers.length} players</p>
+              <p className="text-xs text-primary font-display font-semibold">{stake} ETB stake • {allPlayers.length} players</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

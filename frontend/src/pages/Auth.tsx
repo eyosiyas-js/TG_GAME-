@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Phone, Lock, Eye, EyeOff, Gamepad2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { sounds } from "@/components/game/AnimationEffects";
+import { useTranslation } from "react-i18next";
 
 type AuthMode = "login" | "signup" | "forgot";
 
 const Auth = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>("login");
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +54,7 @@ const Auth = () => {
       } else if (mode === "forgot") {
         setTimeout(() => {
           setLoading(false);
-          setMessage("Password reset functionality is not implemented yet.");
+          setMessage(t("auth.resetNotImplemented"));
         }, 1000);
       }
     } catch (err: any) {
@@ -103,21 +105,21 @@ const Auth = () => {
           className="text-center mb-8 mt-8"
         >
           <motion.div
-            animate={{ rotate: [0, 5, -5, 0] }}
+            animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 3, repeat: Infinity }}
-            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4"
+            className="w-24 h-24 rounded-2xl flex items-center justify-center mx-auto mb-4"
           >
-            <Gamepad2 className="w-8 h-8 text-primary-foreground" />
+            <img src="/logo.png" alt="Habt Bet Logo" className="w-full h-full object-contain" />
           </motion.div>
           <h1 className="text-2xl font-display font-extrabold text-foreground">
-            {mode === "login" ? "Welcome Back" : mode === "signup" ? "Join the Game" : "Reset Password"}
+            {mode === "login" ? t("auth.welcomeBack") : mode === "signup" ? t("auth.joinTheGame") : t("auth.resetPassword")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login"
-              ? "Sign in to continue playing"
+              ? t("auth.signInContinue")
               : mode === "signup"
-              ? "Create your account and start winning"
-              : "We'll send you a reset link"}
+              ? t("auth.createAccountStart")
+              : t("auth.sendResetLink")}
           </p>
         </motion.div>
 
@@ -132,7 +134,7 @@ const Auth = () => {
         >
           <div className="space-y-1.5">
             <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider">
-              Phone Number
+              {t("auth.phoneNumber")}
             </label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -140,7 +142,7 @@ const Auth = () => {
                 type="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="Enter your phone number"
+                placeholder={t("auth.enterPhone")}
                 required
                 className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted border border-border text-foreground font-body text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground"
               />
@@ -150,7 +152,7 @@ const Auth = () => {
           {mode !== "forgot" && (
             <div className="space-y-1.5">
               <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider">
-                Password
+                {t("auth.password")}
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -158,7 +160,7 @@ const Auth = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t("auth.enterPassword")}
                   required
                   className="w-full h-12 pl-10 pr-12 rounded-xl bg-muted border border-border text-foreground font-body text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground"
                 />
@@ -183,7 +185,7 @@ const Auth = () => {
               onClick={() => setMode("forgot")}
               className="text-xs text-primary font-display font-semibold"
             >
-              Forgot password?
+              {t("auth.forgotPassword")}
             </button>
           )}
 
@@ -216,7 +218,7 @@ const Auth = () => {
                 className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
               />
             ) : (
-              mode === "login" ? "Sign In" : mode === "signup" ? "Create Account" : "Send Reset Link"
+              mode === "login" ? t("auth.signIn") : mode === "signup" ? t("auth.createAccount") : t("auth.sendReset")
             )}
           </motion.button>
         </motion.form>
@@ -230,12 +232,12 @@ const Auth = () => {
             className="text-center mt-6"
           >
             <p className="text-sm text-muted-foreground">
-              {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
+              {mode === "login" ? t("auth.noAccount") : t("auth.haveAccount")}{" "}
               <button
                 onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(null); }}
                 className="text-primary font-display font-bold"
               >
-                {mode === "login" ? "Sign Up" : "Sign In"}
+                {mode === "login" ? t("auth.signUp") : t("auth.signIn")}
               </button>
             </p>
           </motion.div>

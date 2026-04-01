@@ -4,13 +4,16 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-
-const withdrawMethods = [
-  { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "Withdraw via CBE Birr" },
-  { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Withdraw via Telebirr" },
-];
+import { useTranslation } from "react-i18next";
 
 const WithdrawPage = () => {
+  const { t } = useTranslation();
+
+  const withdrawMethods = [
+    { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: t("withdraw.withdrawViaCbeBirr") },
+    { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: t("withdraw.withdrawViaTelebirr") },
+  ];
+
   const [method, setMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -57,11 +60,11 @@ const WithdrawPage = () => {
           <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-primary" />
           </motion.div>
-          <h2 className="text-xl font-display font-bold text-foreground mb-2">Withdrawal Requested!</h2>
-          <p className="text-sm text-muted-foreground mb-1">Amount: ${amount}</p>
-          <p className="text-xs text-muted-foreground mb-6">Your request is pending admin approval.</p>
+          <h2 className="text-xl font-display font-bold text-foreground mb-2">{t("withdraw.withdrawalRequested")}</h2>
+          <p className="text-sm text-muted-foreground mb-1">{t("withdraw.amountLabel")} {amount} ETB</p>
+          <p className="text-xs text-muted-foreground mb-6">{t("withdraw.pendingApproval")}</p>
           <Link to="/wallet" className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm inline-block">
-            Back to Wallet
+            {t("withdraw.backToWallet")}
           </Link>
         </motion.div>
       </div>
@@ -74,50 +77,50 @@ const WithdrawPage = () => {
         <Link to="/wallet" className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
           <ArrowLeft className="w-4.5 h-4.5 text-muted-foreground" />
         </Link>
-        <h1 className="text-xl font-display font-bold text-foreground">Withdraw</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">{t("withdraw.title")}</h1>
       </motion.div>
 
       {/* Balance */}
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="card-game rounded-xl p-4 mb-6 text-center">
-        <p className="text-xs text-muted-foreground">Available Balance</p>
-        <p className="text-2xl font-display font-extrabold text-foreground">${Number(balance).toLocaleString()}</p>
+        <p className="text-xs text-muted-foreground">{t("withdraw.availableBalance")}</p>
+        <p className="text-2xl font-display font-extrabold text-foreground">{Number(balance).toLocaleString()} ETB</p>
       </motion.div>
 
       {/* Amount */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Amount</label>
+        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("withdraw.amount")}</label>
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-display font-bold">$</span>
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-display font-bold">ETB</span>
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
             max={balance}
-            className="w-full h-14 pl-8 pr-4 rounded-xl bg-muted border border-border text-foreground font-display font-bold text-xl outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+            className="w-full h-14 pl-12 pr-4 rounded-xl bg-muted border border-border text-foreground font-display font-bold text-xl outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
         {parseFloat(amount) > balance && (
           <div className="flex items-center gap-1.5 mt-2 text-destructive text-xs">
             <AlertTriangle className="w-3 h-3" />
-            <span>Exceeds available balance</span>
+            <span>{t("withdraw.exceedsBalance")}</span>
           </div>
         )}
         <div className="flex gap-2 mt-2">
           {[100, 500, 1000].map(a => (
             <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(Math.min(a, Number(balance))))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
-              ${a}
+              {a} ETB
             </motion.button>
           ))}
           <motion.button whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(balance))} className="flex-1 py-2 rounded-lg bg-primary/20 text-primary font-display font-bold text-xs border border-primary/30">
-            Max
+            {t("common.max")}
           </motion.button>
         </div>
       </motion.div>
 
       {/* Method */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6">
-        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Withdrawal Method</label>
+        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("withdraw.withdrawalMethod")}</label>
         <div className="space-y-2">
           {withdrawMethods.map(pm => (
             <motion.button
@@ -143,7 +146,7 @@ const WithdrawPage = () => {
         {method && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden">
             <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Phone Number
+              {t("withdraw.phoneNumber")}
             </label>
             <input
               value={userPhone}
@@ -152,7 +155,7 @@ const WithdrawPage = () => {
             />
             <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
               <Info className="w-3 h-3" />
-              <span>The withdrawal will be made to this number.</span>
+              <span>{t("withdraw.phoneNote")}</span>
             </div>
           </motion.div>
         )}
@@ -164,7 +167,7 @@ const WithdrawPage = () => {
         disabled={!amount || !method || parseFloat(amount) > balance || parseFloat(amount) <= 0}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
-        Request Withdrawal
+        {t("withdraw.requestWithdrawal")}
       </motion.button>
       {/* Confirmation Modal */}
       <AnimatePresence>
@@ -186,15 +189,15 @@ const WithdrawPage = () => {
               <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 hover:scale-105 transition-transform cursor-default">
                 <AlertCircle className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-xl font-display font-bold text-foreground mb-2">Confirm Withdrawal</h3>
-              <p className="text-sm text-muted-foreground mb-6">Are you sure you want to proceed with a withdrawal of <strong className="text-foreground text-base">${amount}</strong>?</p>
+              <h3 className="text-xl font-display font-bold text-foreground mb-2">{t("withdraw.confirmWithdrawal")}</h3>
+              <p className="text-sm text-muted-foreground mb-6">{t("withdraw.confirmWithdrawalMsg")} <strong className="text-foreground text-base">{amount} ETB</strong> {t("withdraw.confirmWithdrawalMsgEnd") || "?"}</p>
               
               <div className="flex gap-3 mt-4">
                 <button 
                   onClick={() => setShowConfirm(false)}
                   className="flex-1 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border hover:bg-muted/80 transition-colors"
                 >
-                  No, Cancel
+                  {t("withdraw.noCancel")}
                 </button>
                 <button 
                   onClick={() => {
@@ -203,7 +206,7 @@ const WithdrawPage = () => {
                   }}
                   className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary hover:opacity-90 transition-opacity"
                 >
-                  Yes, Proceed
+                  {t("withdraw.yesProceed")}
                 </button>
               </div>
             </motion.div>

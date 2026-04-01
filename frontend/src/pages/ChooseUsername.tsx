@@ -4,8 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { User, Gamepad2, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import { sounds } from "@/components/game/AnimationEffects";
+import { useTranslation } from "react-i18next";
 
 const ChooseUsername = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,17 +76,17 @@ const ChooseUsername = () => {
           className="text-center mb-8"
         >
           <motion.div
-            animate={{ rotate: [0, 5, -5, 0] }}
+            animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 3, repeat: Infinity }}
-            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4"
+            className="w-24 h-24 rounded-2xl flex items-center justify-center mx-auto mb-4"
           >
-            <Gamepad2 className="w-8 h-8 text-primary-foreground" />
+            <img src="/logo.png" alt="Habt Bet Logo" className="w-full h-full object-contain" />
           </motion.div>
           <h1 className="text-2xl font-display font-extrabold text-foreground">
-            Choose Your Name
+            {t("chooseUsername.title")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Pick a username that other players will see
+            {t("chooseUsername.subtitle")}
           </p>
         </motion.div>
 
@@ -98,7 +100,7 @@ const ChooseUsername = () => {
         >
           <div className="space-y-1.5">
             <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider">
-              Username
+              {t("chooseUsername.username")}
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -106,7 +108,7 @@ const ChooseUsername = () => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter a username (min 3 characters)"
+                placeholder={t("chooseUsername.placeholder")}
                 required
                 minLength={3}
                 autoFocus
@@ -146,7 +148,7 @@ const ChooseUsername = () => {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Let's Go!
+                {t("chooseUsername.letsGo")}
               </>
             )}
           </motion.button>

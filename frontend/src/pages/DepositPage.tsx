@@ -3,14 +3,17 @@ import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle
 import { Link } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-
-const paymentMethods = [
-  { id: "cbe", label: "CBE", icon: Building2, desc: "Commercial Bank of Ethiopia" },
-  { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "CBE Mobile Money" },
-  { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Ethio Telecom Mobile Money" },
-];
+import { useTranslation } from "react-i18next";
 
 const DepositPage = () => {
+  const { t } = useTranslation();
+
+  const paymentMethods = [
+    { id: "cbe", label: "CBE", icon: Building2, desc: "Commercial Bank of Ethiopia" },
+    { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "CBE Mobile Money" },
+    { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Ethio Telecom Mobile Money" },
+  ];
+
   const [method, setMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentId, setPaymentId] = useState("");
@@ -58,11 +61,11 @@ const DepositPage = () => {
           <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-primary" />
           </motion.div>
-          <h2 className="text-xl font-display font-bold text-foreground mb-2">Deposit Submitted!</h2>
-          <p className="text-sm text-muted-foreground mb-1">Amount: ${amount}</p>
-          <p className="text-xs text-muted-foreground mb-6">Your deposit is being verified. This usually takes 1-5 minutes.</p>
+          <h2 className="text-xl font-display font-bold text-foreground mb-2">{t("deposit.depositSubmitted")}</h2>
+          <p className="text-sm text-muted-foreground mb-1">{t("deposit.amountLabel")} {amount} ETB</p>
+          <p className="text-xs text-muted-foreground mb-6">{t("deposit.verifyingDeposit")}</p>
           <Link to="/wallet" className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm inline-block">
-            Back to Wallet
+            {t("deposit.backToWallet")}
           </Link>
         </motion.div>
       </div>
@@ -75,26 +78,26 @@ const DepositPage = () => {
         <Link to="/wallet" className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
           <ArrowLeft className="w-4.5 h-4.5 text-muted-foreground" />
         </Link>
-        <h1 className="text-xl font-display font-bold text-foreground">Deposit</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">{t("deposit.title")}</h1>
       </motion.div>
 
       {/* Amount */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Amount</label>
+        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.amount")}</label>
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-display font-bold">$</span>
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-display font-bold">ETB</span>
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full h-14 pl-8 pr-4 rounded-xl bg-muted border border-border text-foreground font-display font-bold text-xl outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+            className="w-full h-14 pl-12 pr-4 rounded-xl bg-muted border border-border text-foreground font-display font-bold text-xl outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
         <div className="flex gap-2 mt-2">
           {[50, 100, 500, 1000].map(a => (
             <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(a))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
-              ${a}
+              {a} ETB
             </motion.button>
           ))}
         </div>
@@ -102,7 +105,7 @@ const DepositPage = () => {
 
       {/* Payment Method */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6">
-        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Payment Method</label>
+        <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.paymentMethod")}</label>
         <div className="space-y-2">
           {paymentMethods.map(pm => (
             <motion.button
@@ -130,9 +133,9 @@ const DepositPage = () => {
             
             {/* Steps Section */}
             <div className="card-game rounded-xl p-4 space-y-4">
-              <p className="text-xs font-display font-bold text-muted-foreground uppercase">Steps</p>
+              <p className="text-xs font-display font-bold text-muted-foreground uppercase">{t("deposit.steps")}</p>
               <div className="space-y-4 text-xs text-muted-foreground">
-                <p>1. Send payment of <span className="text-foreground font-semibold">${amount || "0"}</span> to one of the following accounts:</p>
+                <p>{t("deposit.step1")} <span className="text-foreground font-semibold">{amount || "0"} ETB</span> {t("deposit.step1end")}</p>
                 <div className="grid gap-2">
                   <div className="bg-muted rounded-lg p-3 border border-border">
                     <div className="flex items-center justify-between mb-1">
@@ -158,14 +161,14 @@ const DepositPage = () => {
                     </span>
                   </div>
                 </div>
-                <p>2. Enter your "Sender's Name" and transaction ID below.</p>
-                <p>3. Upload a receipt screenshot for faster verification.</p>
+                <p>{t("deposit.step2")}</p>
+                <p>{t("deposit.step3")}</p>
               </div>
             </div>
 
             {/* Guide Section */}
             <div className="card-game rounded-xl p-4 space-y-3">
-              <p className="text-xs font-display font-bold text-muted-foreground uppercase">Guide</p>
+              <p className="text-xs font-display font-bold text-muted-foreground uppercase">{t("deposit.guide")}</p>
               
               <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
                 {[1, 2, 3, 4].map(idx => (
@@ -205,15 +208,15 @@ const DepositPage = () => {
                 <span className="text-destructive font-bold">!</span>
              </div>
              <div>
-                <p className="text-xs font-bold text-destructive mb-1 uppercase tracking-wider">Crucial Requirement</p>
-                <p className="text-xs text-destructive/80 leading-relaxed font-medium">The sender's name provided below <span className="font-bold underline">must match exactly</span> with the name used during the real-world transfer. Any mismatch will result in severe delays or potential loss of funds.</p>
+                <p className="text-xs font-bold text-destructive mb-1 uppercase tracking-wider">{t("deposit.crucialRequirement")}</p>
+                <p className="text-xs text-destructive/80 leading-relaxed font-medium">{t("deposit.senderWarning")}</p>
              </div>
           </div>
-          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Sender's Name</label>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.sendersName")}</label>
           <input
             value={senderName}
             onChange={(e) => setSenderName(e.target.value)}
-            placeholder="Name used on your bank/mobile account..."
+            placeholder={t("deposit.senderPlaceholder")}
             className="w-full h-12 px-4 rounded-xl bg-muted border border-border text-foreground font-display font-semibold text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
         </motion.div>
@@ -222,11 +225,11 @@ const DepositPage = () => {
       {/* Payment ID */}
       {method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
-          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Payment / Transaction ID</label>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.paymentId")}</label>
           <input
             value={paymentId}
             onChange={(e) => setPaymentId(e.target.value)}
-            placeholder="Enter payment reference..."
+            placeholder={t("deposit.paymentIdPlaceholder")}
             className="w-full h-12 px-4 rounded-xl bg-muted border border-border text-foreground font-display font-semibold text-sm outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
         </motion.div>
@@ -234,10 +237,10 @@ const DepositPage = () => {
 
       {method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Receipt (Required)</label>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.receiptRequired")}</label>
           <label className="card-game rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer border-2 border-dashed border-border hover:border-primary/50 transition-colors">
             <Upload className="w-6 h-6 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{receipt?.name || "Tap to upload receipt (Image/PDF)"}</span>
+            <span className="text-xs text-muted-foreground">{receipt?.name || t("deposit.tapToUpload")}</span>
             <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
           </label>
         </motion.div>
@@ -249,7 +252,7 @@ const DepositPage = () => {
         disabled={!amount || !method || !senderName || !receipt}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
-        Submit Deposit
+        {t("deposit.submitDeposit")}
       </motion.button>
 
       {/* Image Modal */}
@@ -301,15 +304,15 @@ const DepositPage = () => {
               <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 hover:scale-105 transition-transform cursor-default">
                 <AlertCircle className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-xl font-display font-bold text-foreground mb-2">Confirm Deposit</h3>
-              <p className="text-sm text-muted-foreground mb-6">Are you sure you want to proceed with a deposit of <strong className="text-foreground text-base">${amount}</strong>?</p>
+              <h3 className="text-xl font-display font-bold text-foreground mb-2">{t("deposit.confirmDeposit")}</h3>
+              <p className="text-sm text-muted-foreground mb-6">{t("deposit.confirmDepositMsg")} <strong className="text-foreground text-base">{amount} ETB</strong> {t("deposit.confirmDepositMsgEnd") || "?"}</p>
               
               <div className="flex gap-3 mt-4">
                 <button 
                   onClick={() => setShowConfirm(false)}
                   className="flex-1 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border hover:bg-muted/80 transition-colors"
                 >
-                  No, Cancel
+                  {t("deposit.noCancel")}
                 </button>
                 <button 
                   onClick={() => {
@@ -318,7 +321,7 @@ const DepositPage = () => {
                   }}
                   className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary hover:opacity-90 transition-opacity"
                 >
-                  Yes, Proceed
+                  {t("deposit.yesProceed")}
                 </button>
               </div>
             </motion.div>

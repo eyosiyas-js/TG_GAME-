@@ -1,17 +1,23 @@
-import { Home, Gamepad2, Wallet, User } from "lucide-react";
+import { Home, Wallet, User } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { sounds } from "@/components/game/AnimationEffects";
-
-const tabs = [
-  { to: "/", icon: Home, label: "Home" },
-  { to: "/games", icon: Gamepad2, label: "My Games" },
-  { to: "/wallet", icon: Wallet, label: "Wallet" },
-  { to: "/profile", icon: User, label: "Profile" },
-];
+import { useTranslation } from "react-i18next";
 
 const BottomNav = () => {
   const location = useLocation();
+  const { t } = useTranslation();
+
+  const LogoIcon = ({ className }: { className?: string }) => (
+    <img src="/logo.png" className={`object-contain ${className}`} alt="Habt Bet" />
+  );
+
+  const tabs = [
+    { to: "/", icon: Home, label: t("nav.home") },
+    { to: "/games", icon: LogoIcon, label: t("nav.myGames") },
+    { to: "/wallet", icon: Wallet, label: t("nav.wallet") },
+    { to: "/profile", icon: User, label: t("nav.profile") },
+  ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-border/50 safe-area-bottom">

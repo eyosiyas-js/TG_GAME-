@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { Trophy, Gamepad2, TrendingUp, Settings, ChevronRight, Star, Target, Loader2 } from "lucide-react";
+import { Trophy, TrendingUp, Settings, ChevronRight, Star, Target, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useTranslation } from "react-i18next";
 
 const Profile = () => {
+  const { t } = useTranslation();
   const token = localStorage.getItem("token") || "";
   const username = localStorage.getItem("username") || "Player";
 
@@ -22,16 +24,16 @@ const Profile = () => {
   }
 
   const stats = [
-    { label: "Games", value: statsData?.totalMatches || 0, icon: Gamepad2, color: "text-secondary" },
-    { label: "Wins", value: statsData?.wins || 0, icon: Trophy, color: "text-primary" },
-    { label: "Win Rate", value: `${statsData?.winRate || 0}%`, icon: TrendingUp, color: "text-accent" },
-    { label: "Streak", value: statsData?.streak || 0, icon: Target, color: "text-primary" },
+    { label: t("profile.gamesLabel"), value: statsData?.totalMatches || 0, icon: () => <img src="/logo.png" className="w-4 h-4 object-contain brightness-0 invert opacity-70" alt="Games" />, color: "text-secondary" },
+    { label: t("profile.winsLabel"), value: statsData?.wins || 0, icon: Trophy, color: "text-primary" },
+    { label: t("profile.winRateLabel"), value: `${statsData?.winRate || 0}%`, icon: TrendingUp, color: "text-accent" },
+    { label: t("profile.streakLabel"), value: statsData?.streak || 0, icon: Target, color: "text-primary" },
   ];
 
   const recentAchievements = [
-    { label: "Early Adopter", emoji: "🚀" },
-    { label: "First Stake", emoji: "💎" },
-    { label: "Winner Circle", emoji: "🏆" },
+    { label: t("profile.earlyAdopter"), emoji: "🚀" },
+    { label: t("profile.firstStake"), emoji: "💎" },
+    { label: t("profile.winnerCircle"), emoji: "🏆" },
   ];
 
   return (
@@ -41,7 +43,7 @@ const Profile = () => {
         animate={{ opacity: 1 }}
         className="flex items-center justify-between mb-6"
       >
-        <h1 className="text-xl font-display font-bold text-foreground">Profile</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">{t("profile.title")}</h1>
         <Link to="/settings" className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
           <Settings className="w-4.5 h-4.5 text-muted-foreground" />
         </Link>
@@ -59,7 +61,7 @@ const Profile = () => {
         <h2 className="text-lg font-display font-bold text-foreground">{username}</h2>
         <div className="flex items-center gap-1 mt-1">
           <Star className="w-3.5 h-3.5 text-accent" />
-          <span className="text-xs text-accent font-display font-semibold">Live Player</span>
+          <span className="text-xs text-accent font-display font-semibold">{t("profile.livePlayer")}</span>
         </div>
       </motion.div>
 
@@ -86,7 +88,7 @@ const Profile = () => {
         transition={{ delay: 0.25 }}
         className="mb-8"
       >
-        <h3 className="text-sm font-display font-bold text-foreground mb-3">Milestones</h3>
+        <h3 className="text-sm font-display font-bold text-foreground mb-3">{t("profile.milestones")}</h3>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
           {recentAchievements.map((a) => (
             <div
@@ -108,9 +110,9 @@ const Profile = () => {
         className="space-y-2"
       >
         {[
-          { label: "My Match History", to: "/games" },
-          { label: "Leaderboard Standings", to: "/leaderboard" },
-          { label: "Account Settings", to: "/settings" },
+          { label: t("profile.myMatchHistory"), to: "/games" },
+          { label: t("profile.leaderboardStandings"), to: "/leaderboard" },
+          { label: t("profile.accountSettings"), to: "/settings" },
         ].map((link) => (
           <Link
             key={link.label}

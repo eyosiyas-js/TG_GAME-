@@ -6,8 +6,11 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { X, Loader2, Send, User } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 const WalletPage = () => {
+  const { t } = useTranslation();
+
   const { data: balance, isLoading, refetch: refetchBalance } = useQuery({
     queryKey: ["wallet-balance"],
     queryFn: () => {
@@ -69,14 +72,14 @@ const WalletPage = () => {
         setPreviewUser(user);
       } catch (err: any) {
         setPreviewUser(null);
-        setPreviewError("User not found");
+        setPreviewError(t("wallet.userNotFound"));
       } finally {
         setIsPreviewLoading(false);
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [transferTarget]);
+  }, [transferTarget, t]);
 
   const handleTransfer = async () => {
     if (!transferTarget || !transferAmount || Number(transferAmount) <= 0) return;
@@ -84,7 +87,7 @@ const WalletPage = () => {
     try {
       const token = localStorage.getItem("token") || "";
       await api.post("/wallet/transfer", { targetUsername: transferTarget, amount: Number(transferAmount) }, token);
-      toast.success(`Successfully sent $${transferAmount} to ${transferTarget}`);
+      toast.success(`Successfully sent ${transferAmount} ETB to ${transferTarget}`);
       setShowTransfer(false);
       setTransferTarget("");
       setTransferAmount("");
@@ -112,7 +115,7 @@ const WalletPage = () => {
   const rawDeposits = (depositsData || []).map((d: any) => ({
     id: d.id,
     amount: Number(d.amount),
-    label: `DEPOSIT REQUEST`,
+    label: t("wallet.depositRequest"),
     time: new Date(d.createdAt).toLocaleString(),
     timestamp: new Date(d.createdAt).getTime(),
     type: "DEPOSIT",
@@ -126,7 +129,7 @@ const WalletPage = () => {
   const rawWithdrawals = (withdrawalsData || []).map((w: any) => ({
     id: w.id,
     amount: -Number(w.amount),
-    label: `WITHDRAWAL REQUEST`,
+    label: t("wallet.withdrawalRequest"),
     time: new Date(w.createdAt).toLocaleString(),
     timestamp: new Date(w.createdAt).getTime(),
     type: "WITHDRAW",
@@ -144,36 +147,42 @@ const WalletPage = () => {
     return true;
   });
 
+  const tabLabels: Record<string, string> = {
+    all: t("wallet.all"),
+    deposits: t("wallet.deposits"),
+    withdrawals: t("wallet.withdrawals"),
+  };
+
   return (
     <div className="px-4 pt-6">
       <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xl font-display font-bold text-foreground mb-6">
-        Wallet
+        {t("wallet.title")}
       </motion.h1>
 
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="glass-card rounded-2xl p-6 mb-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-secondary/15 via-transparent to-primary/10" />
         <div className="relative z-10">
-          <p className="text-muted-foreground text-xs font-body mb-1">Available Balance</p>
+          <p className="text-muted-foreground text-xs font-body mb-1">{t("wallet.availableBalance")}</p>
           <h2 className="text-4xl font-display font-extrabold text-foreground mb-4">
-            {isLoading ? "..." : `$${Number(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            {isLoading ? "..." : `${Number(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB`}
           </h2>
           <div className="flex gap-2">
             <Link to="/deposit" className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm">
                 <Plus className="w-4 h-4" />
-                Deposit
+                {t("wallet.deposit")}
               </motion.div>
             </Link>
             <Link to="/withdraw" className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border">
                 <Minus className="w-4 h-4" />
-                Withdraw
+                {t("wallet.withdraw")}
               </motion.div>
             </Link>
             <button onClick={() => setShowTransfer(true)} className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-display font-bold text-sm border border-border">
                 <Send className="w-4 h-4" />
-                Transfer
+                {t("wallet.transfer")}
               </motion.div>
             </button>
           </div>
@@ -184,18 +193,18 @@ const WalletPage = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-display font-bold">Transfer Funds</h2>
+              <h2 className="text-lg font-display font-bold">{t("wallet.transferFunds")}</h2>
               <button onClick={() => { setShowTransfer(false); setTransferTarget(""); setTransferAmount(""); setPreviewUser(null); setPreviewError(""); }} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Recipient Username</label>
-                <input type="text" value={transferTarget} onChange={e => setTransferTarget(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Target username..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("wallet.recipientUsername")}</label>
+                <input type="text" value={transferTarget} onChange={e => setTransferTarget(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("wallet.targetUsername")} />
                 {transferTarget.length >= 3 && (
                   <div className="mt-2 h-14 flex items-center">
                     {isPreviewLoading ? (
                       <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Checking user...
+                        <Loader2 className="w-4 h-4 animate-spin" /> {t("wallet.checkingUser")}
                       </div>
                     ) : previewError ? (
                       <div className="text-destructive text-sm font-semibold">{previewError}</div>
@@ -210,7 +219,7 @@ const WalletPage = () => {
                         </div>
                         <div>
                           <p className="font-display font-bold text-sm leading-tight text-foreground">{previewUser.username}</p>
-                          <p className="text-xs text-muted-foreground font-semibold">Level {previewUser.level}</p>
+                          <p className="text-xs text-muted-foreground font-semibold">{t("common.level")} {previewUser.level}</p>
                         </div>
                       </div>
                     ) : null}
@@ -218,11 +227,11 @@ const WalletPage = () => {
                 )}
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Amount ($)</label>
-                <input type="number" min="1" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Amount to send..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("wallet.amountLabel")}</label>
+                <input type="number" min="1" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("wallet.amountToSend")} />
               </div>
               <button disabled={isTransferring || !!previewError || !previewUser} onClick={handleTransfer} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
-                {isTransferring ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Funds"}
+                {isTransferring ? <Loader2 className="w-5 h-5 animate-spin" /> : t("wallet.sendFunds")}
               </button>
             </div>
           </motion.div>
@@ -232,7 +241,7 @@ const WalletPage = () => {
       <div className="flex gap-2 mb-4">
         {(["all", "deposits", "withdrawals"] as const).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-lg text-xs font-display font-semibold capitalize transition-all ${activeTab === tab ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-            {tab}
+            {tabLabels[tab]}
           </button>
         ))}
       </div>
@@ -258,7 +267,7 @@ const WalletPage = () => {
               </div>
             </div>
             <p className={`text-sm font-display font-bold ${tx.amount > 0 ? "text-primary" : "text-destructive"}`}>
-              {tx.amount > 0 ? "+" : ""}${Math.abs(tx.amount)}
+              {tx.amount > 0 ? "+" : ""}{Math.abs(tx.amount)} ETB
             </p>
           </div>
         ))}

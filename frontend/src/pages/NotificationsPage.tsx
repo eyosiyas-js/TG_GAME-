@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Notification {
   id: string;
@@ -22,6 +23,7 @@ const iconMap = {
 };
 
 const NotificationsPage = () => {
+  const { t } = useTranslation();
   const token = localStorage.getItem("token") || "";
   const queryClient = useQueryClient();
 
@@ -71,9 +73,9 @@ const NotificationsPage = () => {
             <ArrowLeft className="w-4.5 h-4.5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-xl font-display font-bold text-foreground">Notifications</h1>
+            <h1 className="text-xl font-display font-bold text-foreground">{t("notifications.title")}</h1>
             {unreadCount > 0 && (
-              <p className="text-xs text-primary font-display font-semibold">{unreadCount} unread</p>
+              <p className="text-xs text-primary font-display font-semibold">{unreadCount} {t("notifications.unread")}</p>
             )}
           </div>
         </div>
@@ -83,7 +85,7 @@ const NotificationsPage = () => {
             onClick={markAllRead}
             className="px-3 py-1.5 rounded-lg bg-primary/20 text-primary text-xs font-display font-bold"
           >
-            Mark all read
+            {t("notifications.markAllRead")}
           </motion.button>
         )}
       </motion.div>
@@ -92,7 +94,7 @@ const NotificationsPage = () => {
         {notifications.length === 0 ? (
           <div className="card-game rounded-xl p-8 text-center">
             <Bell className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No notifications yet</p>
+            <p className="text-sm text-muted-foreground">{t("notifications.noNotifications")}</p>
           </div>
         ) : (
           notifications.map((n: Notification, i: number) => {

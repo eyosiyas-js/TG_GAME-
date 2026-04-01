@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Send, Hash, Users, Gamepad2 } from "lucide-react";
+import { MessageCircle, X, Send, Hash, Users } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 type ChatChannel = "global" | "room" | "game";
@@ -13,10 +13,14 @@ interface ChatMessage {
   isSystem?: boolean;
 }
 
+const LogoIcon = ({ className }: { className?: string }) => (
+  <img src="/logo.png" className={`object-contain opacity-70 grayscale ${className}`} alt="In-Game" />
+);
+
 const channelConfig = {
   global: { icon: Hash, label: "Global Lobby", color: "text-primary" },
   room: { icon: Users, label: "Room Chat", color: "text-secondary" },
-  game: { icon: Gamepad2, label: "In-Game", color: "text-accent" },
+  game: { icon: LogoIcon, label: "In-Game", color: "text-accent" },
 };
 
 interface ChatSystemProps {

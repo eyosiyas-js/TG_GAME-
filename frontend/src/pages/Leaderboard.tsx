@@ -3,6 +3,7 @@ import { ArrowLeft, Trophy, Medal, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useTranslation } from "react-i18next";
 
 interface LeaderboardEntry {
   rank: number;
@@ -19,6 +20,7 @@ const rankColors: Record<number, string> = {
 };
 
 const Leaderboard = () => {
+  const { t } = useTranslation();
   const { data: leaderboardData, isLoading } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: async () => {
@@ -47,7 +49,7 @@ const Leaderboard = () => {
         <Link to="/" className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
           <ArrowLeft className="w-4.5 h-4.5 text-muted-foreground" />
         </Link>
-        <h1 className="text-xl font-display font-bold text-foreground">Leaderboard</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">{t("leaderboard.title")}</h1>
       </motion.div>
 
       {/* Top 3 Podium */}
@@ -119,9 +121,9 @@ const Leaderboard = () => {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-display font-semibold text-foreground truncate">
                 {player.name}
-                {player.isYou && <span className="text-primary ml-1 text-[10px] font-bold uppercase tracking-tighter">(You)</span>}
+                {player.isYou && <span className="text-primary ml-1 text-[10px] font-bold uppercase tracking-tighter">({t("common.you")})</span>}
               </p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{player.wins} matches played</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{player.wins} {t("leaderboard.matchesPlayed")}</p>
             </div>
             <p className="text-sm font-display font-bold text-primary font-mono">${player.earnings.toLocaleString()}</p>
           </motion.div>
@@ -131,7 +133,7 @@ const Leaderboard = () => {
       {(!leaderboardData || leaderboardData.length === 0) && (
         <div className="text-center py-12 text-muted-foreground">
           <Trophy className="w-12 h-12 mx-auto mb-2 opacity-20" />
-          <p>No data yet. Start playing!</p>
+          <p>{t("leaderboard.noDataYet")}</p>
         </div>
       )}
     </div>

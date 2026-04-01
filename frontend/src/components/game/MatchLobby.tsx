@@ -200,7 +200,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
           </button>
           <div className="flex-1">
             <h1 className="text-lg font-display font-bold text-foreground">{roomData.name}</h1>
-            <p className="text-xs text-primary font-display font-semibold">${roomData.stake} stake</p>
+            <p className="text-xs text-primary font-display font-semibold">{roomData.stake} ETB stake</p>
           </div>
           {/* Room code badge */}
           <button onClick={handleCopyCode} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted border border-border text-xs font-display font-bold text-foreground">
@@ -311,7 +311,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
                     : "bg-muted text-muted-foreground border border-border"
                 }`}
               >
-                ${option}
+                {option} ETB
               </motion.button>
             ))}
           </div>

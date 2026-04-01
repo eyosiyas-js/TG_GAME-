@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Trophy, Zap, Target, Gamepad2, TrendingUp, Clock } from "lucide-react";
+import { X, Trophy, Zap, Target, TrendingUp, Clock } from "lucide-react";
 
 interface MatchHistory {
   game: string;
@@ -140,8 +140,8 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
               {/* Extra Stats */}
               <div className="grid grid-cols-2 gap-2 mb-5">
                 {[
-                  { icon: Gamepad2, label: "Games Played", value: displayProfile.gamesPlayed },
-                  { icon: TrendingUp, label: "Total Earnings", value: `$${displayProfile.totalEarnings.toLocaleString()}` },
+                  { icon: () => <img src="/logo.png" className="w-4 h-4 object-contain opacity-50 grayscale" alt="Games" />, label: "Games Played", value: displayProfile.gamesPlayed },
+                  { icon: TrendingUp, label: "Total Earnings", value: `${displayProfile.totalEarnings.toLocaleString()} ETB` },
                 ].map((stat, i) => (
                   <motion.div
                     key={stat.label}
@@ -166,8 +166,8 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
                 transition={{ delay: 0.4 }}
                 className="card-game rounded-xl p-3 mb-5 flex items-center gap-3"
               >
-                <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center">
-                  <Gamepad2 className="w-4 h-4 text-accent" />
+                <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center p-1.5">
+                  <img src="/logo.png" className="w-full h-full object-contain drop-shadow" alt="Favorite Game" />
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground">Favorite Game</p>
@@ -196,7 +196,7 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
                       <span className={`text-xs font-display font-bold ${
                         match.result === "win" ? "text-primary" : match.result === "loss" ? "text-destructive" : "text-muted-foreground"
                       }`}>
-                        {match.result === "win" ? `+$${match.stake}` : match.result === "loss" ? `-$${match.stake}` : "$0"}
+                        {match.result === "win" ? `+${match.stake} ETB` : match.result === "loss" ? `-${match.stake} ETB` : "0 ETB"}
                       </span>
                       <span className="text-[10px] text-muted-foreground">{match.date}</span>
                     </motion.div>

@@ -1,11 +1,13 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Lock, Bell, Shield, LogOut, ChevronRight, X, Loader2 } from "lucide-react";
+import { ArrowLeft, User, Lock, Bell, Shield, LogOut, ChevronRight, X, Loader2, Globe } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 const SettingsPage = () => {
+  const { t, i18n } = useTranslation();
   const [notifications, setNotifications] = useState(true);
   const navigate = useNavigate();
 
@@ -97,24 +99,32 @@ const SettingsPage = () => {
     navigate("/auth");
   };
 
+  const currentLang = i18n.language;
+
+  const toggleLanguage = () => {
+    const newLang = currentLang === "en" ? "am" : "en";
+    i18n.changeLanguage(newLang);
+  };
+
   const sections = [
     {
-      title: "Account",
+      title: t("settings.account"),
       items: [
-        { icon: User, label: "Change Username", desc: username, onClick: () => setShowUserModal(true) },
-        { icon: Lock, label: "Change Password", desc: "Change your account password", onClick: () => setShowPassModal(true) },
+        { icon: User, label: t("settings.changeUsername"), desc: username, onClick: () => setShowUserModal(true) },
+        { icon: Lock, label: t("settings.changePassword"), desc: t("settings.changePasswordDesc"), onClick: () => setShowPassModal(true) },
       ],
     },
     {
-      title: "Preferences",
+      title: t("settings.preferences"),
       items: [
-        { icon: Bell, label: "Notifications", desc: notifications ? "Enabled" : "Disabled", toggle: true },
+        { icon: Bell, label: t("settings.notifications"), desc: notifications ? t("settings.enabled") : t("settings.disabled"), toggle: true },
+        { icon: Globe, label: t("settings.language"), desc: currentLang === "am" ? t("settings.amharic") : t("settings.english"), onClick: toggleLanguage, langToggle: true },
       ],
     },
     {
-      title: "Security",
+      title: t("settings.security"),
       items: [
-        { icon: Shield, label: "Two-Factor Auth", desc: "Not enabled" },
+        { icon: Shield, label: t("settings.twoFactorAuth"), desc: t("settings.notEnabled") },
       ],
     },
   ];
@@ -125,7 +135,7 @@ const SettingsPage = () => {
         <Link to="/profile" className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
           <ArrowLeft className="w-4.5 h-4.5 text-muted-foreground" />
         </Link>
-        <h1 className="text-xl font-display font-bold text-foreground">Settings</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">{t("settings.title")}</h1>
       </motion.div>
 
       {sections.map((section, i) => (
@@ -167,6 +177,18 @@ const SettingsPage = () => {
                       }`}
                     />
                   </div>
+                ) : (itm as any).langToggle ? (
+                  <div
+                    className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                      currentLang === "am" ? "bg-primary" : "bg-muted"
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-foreground transition-transform ${
+                        currentLang === "am" ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </div>
                 ) : (
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -186,35 +208,35 @@ const SettingsPage = () => {
         <div className="w-9 h-9 rounded-lg bg-destructive/20 flex items-center justify-center">
           <LogOut className="w-4 h-4 text-destructive" />
         </div>
-        <span className="text-sm font-display font-semibold text-destructive">Log Out</span>
+        <span className="text-sm font-display font-semibold text-destructive">{t("settings.logOut")}</span>
       </motion.button>
 
       {showUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-display font-bold">Change Username</h2>
+              <h2 className="text-lg font-display font-bold">{t("settings.changeUsername")}</h2>
               <button onClick={() => { setShowUserModal(false); setNewUsername(""); setUsernameAvailability(""); }} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">New Username</label>
-                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter new username..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("settings.newUsername")}</label>
+                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("settings.enterNewUsername")} />
                 
                 {newUsername.length >= 3 && newUsername.toLowerCase() !== username.toLowerCase() && (
                   <div className="mt-2 text-xs font-semibold">
                     {isCheckingUsername ? (
-                      <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Checking availability...</span>
+                      <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> {t("settings.checkingAvailability")}</span>
                     ) : usernameAvailability === "taken" ? (
-                      <span className="text-destructive">Username already taken</span>
+                      <span className="text-destructive">{t("settings.usernameTaken")}</span>
                     ) : usernameAvailability === "available" ? (
-                      <span className="text-green-500">Username available!</span>
+                      <span className="text-green-500">{t("settings.usernameAvailable")}</span>
                     ) : null}
                   </div>
                 )}
               </div>
               <button disabled={isUpdatingUser || isCheckingUsername || usernameAvailability === "taken" || newUsername.length < 3} onClick={handleUpdateUsername} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
-                {isUpdatingUser ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Username"}
+                {isUpdatingUser ? <Loader2 className="w-5 h-5 animate-spin" /> : t("settings.saveUsername")}
               </button>
             </div>
           </motion.div>
@@ -225,24 +247,24 @@ const SettingsPage = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm bg-card border border-border p-5 rounded-2xl shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-display font-bold">Change Password</h2>
+              <h2 className="text-lg font-display font-bold">{t("settings.changePassword")}</h2>
               <button onClick={() => setShowPassModal(false)} className="p-1 rounded-md text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Current Password</label>
-                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter current password..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("settings.currentPassword")}</label>
+                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("settings.enterCurrentPassword")} />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">New Password</label>
-                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Enter new password..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("settings.newPassword")}</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("settings.enterNewPassword")} />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Confirm new password..." />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">{t("settings.confirmNewPassword")}</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-muted border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder={t("settings.confirmNewPasswordPlaceholder")} />
               </div>
               <button disabled={isUpdatingPass} onClick={handleUpdatePassword} className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-opacity">
-                {isUpdatingPass ? <Loader2 className="w-5 h-5 animate-spin" /> : "Update Password"}
+                {isUpdatingPass ? <Loader2 className="w-5 h-5 animate-spin" /> : t("settings.updatePassword")}
               </button>
             </div>
           </motion.div>

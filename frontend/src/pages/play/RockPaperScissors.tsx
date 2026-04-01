@@ -356,7 +356,7 @@ const RockPaperScissors = () => {
         </motion.div>
         <h2 className="text-2xl font-display font-bold text-foreground mb-2">Finding Opponent</h2>
         <p className="text-muted-foreground text-sm max-w-[200px] mb-8">
-          Searching for a player with a ${stake} stake...
+          Searching for a player with a {stake} ETB stake...
         </p>
         <motion.div
           animate={{ x: [-20, 20, -20] }}
@@ -407,7 +407,7 @@ const RockPaperScissors = () => {
               </div>
               <p className="text-sm text-muted-foreground mb-6">
                 Leaving during a match will count as a <span className="text-destructive font-bold">loss</span>. 
-                Your stake of <span className="font-bold text-foreground">${stake}</span> will be forfeited to your opponent.
+                Your stake of <span className="font-bold text-foreground">{stake} ETB</span> will be forfeited to your opponent.
               </p>
               <div className="flex gap-3">
                 <motion.button
@@ -497,7 +497,7 @@ const RockPaperScissors = () => {
             </motion.button>
             <div>
               <h1 className="text-lg font-display font-bold text-foreground">RPS</h1>
-              <p className="text-xs text-primary font-display font-semibold">${stake} stake</p>
+              <p className="text-xs text-primary font-display font-semibold">{stake} ETB stake</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -569,7 +569,7 @@ const RockPaperScissors = () => {
                   </motion.p>
                 )}
                 <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={`text-xl font-display font-bold ${result === "win" ? "text-primary" : result === "lose" ? "text-destructive" : "text-muted-foreground"}`}>
-                  {result === "win" ? `+$${winAmount ? winAmount - stake : stake}` : result === "lose" ? `-$${stake}` : "$0"}
+                  {result === "win" ? `+${winAmount ? winAmount - stake : stake} ETB` : result === "lose" ? `-${stake} ETB` : "0 ETB"}
                 </motion.span>
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground flex items-center gap-1">
                   <Timer className="w-3 h-3" /> Match duration: {timer.formatted}
