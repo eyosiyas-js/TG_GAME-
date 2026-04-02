@@ -211,6 +211,11 @@ export class AdminController {
     return this.adminService.updateMultipleSettings(settings, req.apiKey, ip);
   }
 
+  @Get('maintenance')
+  getMaintenanceStatus() {
+    return this.adminService.getMaintenanceStatus();
+  }
+
   // ===================== NOTIFICATIONS =====================
   @Post('notifications/send')
   sendNotification(@Body() body: SendNotificationDto, @Req() req: any, @Ip() ip: string) {

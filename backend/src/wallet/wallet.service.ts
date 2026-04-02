@@ -193,4 +193,59 @@ export class WalletService {
       take: 20,
     });
   }
+
+  async getDepositOptions() {
+    const keys = [
+      'PAY_CBE_1_NUM', 'PAY_CBE_1_NAME', 'PAY_CBE_2_NUM', 'PAY_CBE_2_NAME',
+      'PAY_CBEBIRR_1_NUM', 'PAY_CBEBIRR_1_NAME', 'PAY_CBEBIRR_2_NUM', 'PAY_CBEBIRR_2_NAME',
+      'PAY_TELEBIRR_1_NUM', 'PAY_TELEBIRR_1_NAME', 'PAY_TELEBIRR_2_NUM', 'PAY_TELEBIRR_2_NAME'
+    ];
+    
+    const settings = await (this.prisma as any).systemSetting.findMany({
+      where: { key: { in: keys } }
+    });
+
+    const config: Record<string, string> = {};
+    settings.forEach((s: any) => { config[s.key] = s.value; });
+
+    return [
+      {
+        method: 'CBE',
+        accounts: [
+          { number: config['PAY_CBE_1_NUM'], name: config['PAY_CBE_1_NAME'] },
+          { number: config['PAY_CBE_2_NUM'], name: config['PAY_CBE_2_NAME'] }
+        ].filter(a => a.number)
+      },
+      {
+        method: 'CBEBIRR',
+        accounts: [
+          { number: config['PAY_CBEBIRR_1_NUM'], name: config['PAY_CBEBIRR_1_NAME'] },
+          { number: config['PAY_CBEBIRR_2_NUM'], name: config['PAY_CBEBIRR_2_NAME'] }
+        ].filter(a => a.number)
+      },
+      {
+        method: 'TELEBIRR',
+        accounts: [
+          { number: config['PAY_TELEBIRR_1_NUM'], name: config['PAY_TELEBIRR_1_NAME'] },
+          { number: config['PAY_TELEBIRR_2_NUM'], name: config['PAY_TELEBIRR_2_NAME'] }
+        ].filter(a => a.number)
+      }
+    ];
+  }
+
+  async getDepositSettings() {
+    const keys = [
+      'PAY_CBE_1_NUM', 'PAY_CBE_1_NAME', 'PAY_CBE_2_NUM', 'PAY_CBE_2_NAME',
+      'PAY_CBEBIRR_1_NUM', 'PAY_CBEBIRR_1_NAME', 'PAY_CBEBIRR_2_NUM', 'PAY_CBEBIRR_2_NAME',
+      'PAY_TELEBIRR_1_NUM', 'PAY_TELEBIRR_1_NAME', 'PAY_TELEBIRR_2_NUM', 'PAY_TELEBIRR_2_NAME'
+    ];
+    
+    const settings = await (this.prisma as any).systemSetting.findMany({
+      where: { key: { in: keys } }
+    });
+
+    const config: Record<string, string> = {};
+    settings.forEach((s: any) => { config[s.key] = s.value; });
+    return config;
+  }
 }

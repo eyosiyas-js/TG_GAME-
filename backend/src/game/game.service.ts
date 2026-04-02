@@ -652,6 +652,10 @@ export class GameService {
     return this.botPoolManager.getIsActive();
   }
 
+  async startBotSystem() {
+    await this.botPoolManager.start();
+  }
+
   async stopBotSystem() {
     await this.botPoolManager.stop();
   }

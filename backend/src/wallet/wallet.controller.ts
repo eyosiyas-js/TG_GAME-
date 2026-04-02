@@ -16,6 +16,16 @@ export class WalletController {
     return this.walletService.getBalance(req.user.userId);
   }
 
+  @Get('deposit-options')
+  getDepositOptions() {
+    return this.walletService.getDepositOptions();
+  }
+
+  @Get('settings')
+  getDepositSettings() {
+    return this.walletService.getDepositSettings();
+  }
+
   @Get('user-preview/:username')
   getUserPreview(@Param('username') username: string) {
     return this.walletService.getUserPreview(username);

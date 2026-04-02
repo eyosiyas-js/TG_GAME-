@@ -25,7 +25,8 @@ const DepositPage = () => {
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    api.get("/admin/settings").then(data => setSettings(data)).catch(console.error);
+    const token = localStorage.getItem("token");
+    api.get("/wallet/settings", token || undefined).then(data => setSettings(data)).catch(console.error);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

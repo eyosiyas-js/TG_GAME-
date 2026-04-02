@@ -244,12 +244,17 @@ export class AdminService {
   }
 
   async rejectDeposit(id: string, reason: string, apiKey: string, ip: string) {
-    const deposit = await (this.prisma as any).depositRequest.update({
+    const deposit = await (this.prisma as any).depositRequest.findUnique({ where: { id } });
+    if (!deposit || deposit.status !== 'PENDING') {
+      throw new BadRequestException('Deposit not found or not pending');
+    }
+
+    await (this.prisma as any).depositRequest.update({
       where: { id },
       data: { status: 'REJECTED' },
     });
     await this.logAction(apiKey, 'REJECT_DEPOSIT', id, { reason }, ip);
-    return deposit;
+    return { success: true };
   }
 
   // ===================== WITHDRAWAL MANAGEMENT =====================
@@ -643,7 +648,23 @@ export class AdminService {
   // ===================== SYSTEM SETTINGS =====================
   async getSettings() {
     const settings = await (this.prisma as any).systemSetting.findMany();
-    return new Map(settings.map((s: any) => [s.key, s.value]));
+    const result: Record<string, string> = {};
+    settings.forEach((s: any) => {
+      result[s.key] = s.value;
+    });
+    return result;
+  }
+
+  async getMaintenanceStatus() {
+    const maintenanceSetting = await (this.prisma as any).systemSetting.findUnique({
+      where: { key: 'MAINTENANCE_MODE' }
+    });
+    const maintenanceMode = maintenanceSetting ? maintenanceSetting.value === 'true' : false;
+    const liveGames = await this.gameService.getAdminLiveGames();
+    return {
+      maintenanceMode,
+      activeMatchCount: liveGames.length
+    };
   }
 
   async updateSetting(key: string, value: string, apiKey: string, ip: string) {
