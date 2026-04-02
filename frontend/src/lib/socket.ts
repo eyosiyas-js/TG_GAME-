@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:3005";
+const SOCKET_URL = `http://${window.location.hostname}:3005`;
 
 export const getSocket = () => {
   const token = localStorage.getItem("token");

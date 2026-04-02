@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3005';
+const API_BASE_URL = `http://${window.location.hostname}:3005`;
 
 export const api = {
   async get(endpoint: string, token?: string) {

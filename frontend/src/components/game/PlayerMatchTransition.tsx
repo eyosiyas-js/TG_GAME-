@@ -85,8 +85,8 @@ const PlayerMatchTransition = ({
         Match Found
       </motion.h2>
 
-      <div className={`grid gap-6 w-full max-w-4xl px-4 relative z-10 ${
-        activePlayers.length === 2 ? "grid-cols-[1fr_auto_1fr] items-center max-w-lg mx-auto" : 
+      <div className={`grid gap-6 w-full px-4 relative z-10 ${
+        activePlayers.length === 2 ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center max-w-lg mx-auto" : 
         activePlayers.length === 3 ? "grid-cols-3" : 
         "grid-cols-2 md:grid-cols-4"
       }`}>
@@ -121,7 +121,7 @@ const PlayerMatchTransition = ({
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: "spring", delay: 0.2 + (index * 0.1) }}
-                className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-3xl border border-border/50 backdrop-blur-sm"
+                className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-3xl border border-border/50 backdrop-blur-sm min-w-0"
               >
                 <div className="relative">
                   <motion.div 
