@@ -106,6 +106,12 @@ const WithdrawPage = () => {
             <span>{t("withdraw.exceedsBalance")}</span>
           </div>
         )}
+        {amount && parseFloat(amount) < 20 && (
+          <div className="flex items-center gap-1.5 mt-2 text-destructive text-xs">
+            <AlertTriangle className="w-3 h-3" />
+            <span>Minimum withdrawal is 20 ETB</span>
+          </div>
+        )}
         <div className="flex gap-2 mt-2">
           {[100, 500, 1000].map(a => (
             <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(Math.min(a, Number(balance))))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
@@ -164,7 +170,7 @@ const WithdrawPage = () => {
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={() => setShowConfirm(true)}
-        disabled={!amount || !method || parseFloat(amount) > balance || parseFloat(amount) <= 0}
+        disabled={!amount || !method || parseFloat(amount) > balance || parseFloat(amount) < 20}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
         {t("withdraw.requestWithdrawal")}

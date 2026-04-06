@@ -166,6 +166,33 @@ export class AdminService {
     return result;
   }
 
+  async deleteUser(id: string, apiKey: string, ip: string) {
+    const user = await (this.prisma as any).user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    try {
+      await (this.gameService as any).forceDisconnectUser(id);
+    } catch (e) {
+      console.error(`[ADMIN_SERVICE] Failed to force disconnect leaving user ${id}:`, e);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      await (tx as any).matchMove.deleteMany({ where: { userId: id } });
+      await (tx as any).matchParticipant.deleteMany({ where: { userId: id } });
+      await (tx as any).transaction.deleteMany({ where: { userId: id } });
+      await (tx as any).notification.deleteMany({ where: { userId: id } });
+      await (tx as any).depositRequest.deleteMany({ where: { userId: id } });
+      await (tx as any).withdrawalRequest.deleteMany({ where: { userId: id } });
+      await (tx as any).wallet.deleteMany({ where: { userId: id } });
+      
+      return (tx as any).user.delete({ where: { id } });
+    });
+
+    await this.logAction(apiKey, 'DELETE_USER', id, null, ip);
+    return { success: true, deletedUser: result };
+  }
+
+
   async getUserActivity(id: string) {
     return (this.prisma as any).matchParticipant.findMany({
       where: { userId: id },

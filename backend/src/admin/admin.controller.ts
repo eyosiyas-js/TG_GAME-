@@ -48,6 +48,12 @@ export class AdminController {
     return this.adminService.updateUserBalance(id, body.balance, req.apiKey, ip);
   }
 
+  @Delete('users/:id')
+  deleteUser(@Param('id') id: string, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.deleteUser(id, req.apiKey, ip);
+  }
+
+
   @Get('users/:id/activity')
   getUserActivity(@Param('id') id: string) {
     return this.adminService.getUserActivity(id);

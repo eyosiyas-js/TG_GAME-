@@ -33,7 +33,7 @@ export class AuthService {
       await tx.wallet.create({
         data: {
           userId: newUser.id,
-          balance: 1000.00,
+          balance: 20.00,
         },
       });
 

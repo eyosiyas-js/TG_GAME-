@@ -95,6 +95,12 @@ const DepositPage = () => {
             className="w-full h-14 pl-12 pr-4 rounded-xl bg-muted border border-border text-foreground font-display font-bold text-xl outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
+        {amount && Number(amount) < 20 && (
+          <div className="flex items-center gap-1.5 mt-2 text-destructive text-xs">
+            <AlertCircle className="w-3 h-3" />
+            <span>Minimum deposit is 20 ETB</span>
+          </div>
+        )}
         <div className="flex gap-2 mt-2">
           {[50, 100, 500, 1000].map(a => (
             <motion.button key={a} whileTap={{ scale: 0.95 }} onClick={() => setAmount(String(a))} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-display font-bold text-xs border border-border hover:border-primary/50 transition-colors">
@@ -250,7 +256,7 @@ const DepositPage = () => {
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={() => setShowConfirm(true)}
-        disabled={!amount || !method || !senderName || !receipt}
+        disabled={!amount || Number(amount) < 20 || !method || !senderName || !receipt}
         className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display font-extrabold text-lg glow-primary disabled:opacity-50 disabled:shadow-none"
       >
         {t("deposit.submitDeposit")}

@@ -223,25 +223,7 @@ const Auth = () => {
           </motion.button>
         </motion.form>
 
-        {/* Toggle mode */}
-        {mode !== "forgot" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-center mt-6"
-          >
-            <p className="text-sm text-muted-foreground">
-              {mode === "login" ? t("auth.noAccount") : t("auth.haveAccount")}{" "}
-              <button
-                onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(null); }}
-                className="text-primary font-display font-bold"
-              >
-                {mode === "login" ? t("auth.signUp") : t("auth.signIn")}
-              </button>
-            </p>
-          </motion.div>
-        )}
+        {/* Toggle mode removed because bot handles signup */}
       </div>
     </div>
   );
