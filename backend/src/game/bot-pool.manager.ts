@@ -7,6 +7,24 @@ import { GameType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BotPlayerClient } from './bot-player.client';
 
+const ETHIOPIAN_MALE_NAMES = [
+  "Abebe", "Tesfaye", "Yohannes", "Dawit", "Solomon", "Mekonnen", "Haile", "Tadesse", "Berhanu", "Getachew", "Alemayehu", "Girma", "Fikru", "Nigussie", "Kifle", "Worku", "Kebede", "Dejene", "Tamiru", "Yared", "Asfaw", "Bekele", "Endale", "Hailu", "Tefera", "Desta", "Mulatu", "Belay", "Teshome", "Melaku", "Fisseha", "Admassu", "Gemechu", "Kassahun", "Habtamu", "Tsegaye", "Sisay", "Wondimu", "Amanuel", "Henok", "Nahom", "Bereket", "Natnael", "Eyob", "Robel", "Yonatan", "Ephrem", "Surafel", "Fitsum", "Nahusenay", "Dawud", "Iskinder", "Ermias", "Abiy", "Rediet", "Filmon", "Simon", "Mikael", "Gabriel", "Samuel", "Daniel", "Elias", "Kidus", "Bisrat", "Tewodros", "Zerihun", "Tesfalem", "Biruk", "Ashenafi", "Tamrat"
+];
+
+const ETHIOPIAN_FEMALE_NAMES = [
+  "Selam", "Meskrem", "Rahel", "Hana", "Bethlehem", "Eden", "Saba", "Tsion", "Mahlet", "Birtukan", "Fikirte", "Genet", "Lemlem", "Meseret", "Almaz", "Tigist", "Hewan", "Samrawit", "Meron", "Eyerusalem", "Zewditu", "Roman", "Kidist", "Wubit", "Saron", "Mimi", "Sosina", "Meaza", "Hiwot", "Selamawit"
+];
+
+function getRandomEthiopianName() {
+  const isMale = Math.random() > 0.3;
+  const firstNames = isMale ? ETHIOPIAN_MALE_NAMES : ETHIOPIAN_FEMALE_NAMES;
+  const lastNames = ETHIOPIAN_MALE_NAMES;
+
+  const first = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+  return `${first} ${last}`;
+}
+
 @Injectable()
 export class BotPoolManager implements OnModuleInit {
   private readonly logger = new Logger(BotPoolManager.name);
@@ -26,6 +44,17 @@ export class BotPoolManager implements OnModuleInit {
   async onModuleInit() {
     this.logger.log('BotPoolManager initialized');
     
+    // Rename existing bots with generic names
+    const allBots = await this.prisma.user.findMany({ where: { isBot: true } });
+    for (const bot of allBots) {
+      if (!bot.username || bot.username.startsWith('Player_bot') || bot.username.startsWith('Bot_') || bot.username.includes('bot_')) {
+        await this.prisma.user.update({
+          where: { id: bot.id },
+          data: { username: getRandomEthiopianName() }
+        });
+      }
+    }
+
     // Automated Bot Provisioning
     const gameTypes = ['BINGO', 'RPS', 'DICE'];
     const botTypes = ['NORMAL', 'CHEATER'];
@@ -77,7 +106,7 @@ export class BotPoolManager implements OnModuleInit {
     const id = `bot_${Math.random().toString(36).slice(2, 9)}`;
     const bot = await this.prisma.user.create({
       data: {
-        username: `Player_${id}`,
+        username: getRandomEthiopianName(),
         phoneNumber: `bot_${id}`,
         passwordHash: 'bot_secured_hash',
         isBot: true,
