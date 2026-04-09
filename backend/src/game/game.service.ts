@@ -227,7 +227,7 @@ export class GameService {
   async joinQueue(userId: string, gameType: GameType, stake: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isBanned: true }
+      select: { isBanned: true, botConfig: true }
     });
     if (user?.isBanned) throw new Error('Your account is banned');
 
@@ -252,6 +252,17 @@ export class GameService {
       throw new Error('Insufficient funds');
     }
 
+    // Intercept if targeted for bots
+    if (user && (user.botConfig as any)?.forceBotMatch) {
+      const bots = await this.prisma.user.findMany({ where: { isBot: true, isBanned: false } });
+      const targetType = (user.botConfig as any)?.targetBotType || 'NORMAL';
+      const eligibleBot = bots.find(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === gameType) || bots.find(b => b.isBot);
+      
+      if (eligibleBot) {
+        return this.createMatch(userId, eligibleBot.id, gameType, stake);
+      }
+    }
+
     queue.push(userId);
 
     // If we have 2 players, create a match
@@ -273,7 +284,7 @@ export class GameService {
   ): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isBanned: true }
+      select: { isBanned: true, botConfig: true }
     });
     if (user?.isBanned) throw new Error('Your account is banned');
 
@@ -290,11 +301,27 @@ export class GameService {
       throw new Error('Insufficient funds');
     }
 
+    const requiredPlayers = await this.getBingoQuickPlayers();
+
+    // Intercept if targeted for bots
+    if (user && (user.botConfig as any)?.forceBotMatch) {
+      const bots = await this.prisma.user.findMany({ where: { isBot: true, isBanned: false } });
+      const targetType = (user.botConfig as any)?.targetBotType || 'NORMAL';
+      let eligibleBots = bots.filter(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === 'BINGO');
+      if (eligibleBots.length < requiredPlayers - 1) {
+        eligibleBots = bots.filter(b => b.isBot);
+      }
+      if (eligibleBots.length >= requiredPlayers - 1) {
+        const botIds = eligibleBots.slice(0, requiredPlayers - 1).map(b => b.id);
+        return this.createBingoMatch([userId, ...botIds], stake, 'QUICK');
+      }
+    }
+
     console.log(`[BINGO_QUEUE] User ${userId} joined queue for stake ${stake}. Current length: ${queue.length + 1}`);
     queue.push(userId);
 
     // If exactly required players, start immediately
-    const requiredPlayers = await this.getBingoQuickPlayers();
+    // If exactly required players, start immediately
     if (queue.length >= requiredPlayers) {
       const timer = this.bingoQueueTimers.get(key);
       if (timer) {

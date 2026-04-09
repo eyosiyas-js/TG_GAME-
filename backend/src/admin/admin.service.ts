@@ -118,6 +118,7 @@ export class AdminService {
         isBanned: u.isBanned,
         createdAt: u.createdAt,
         walletBalance: u.wallet?.balance || 0,
+        botConfig: u.botConfig,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
@@ -192,6 +193,24 @@ export class AdminService {
     return { success: true, deletedUser: result };
   }
 
+  async targetUserForBots(id: string, forceBotMatch: boolean, apiKey: string, ip: string) {
+    const user = await (this.prisma as any).user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const updated = await (this.prisma as any).user.update({
+      where: { id },
+      data: {
+        botConfig: {
+          ...(user.botConfig as object || {}),
+          forceBotMatch,
+        },
+      },
+      select: { id: true, botConfig: true }
+    });
+
+    await this.logAction(apiKey, forceBotMatch ? 'TARGET_USER_BOTS' : 'UNTARGET_USER_BOTS', id, null, ip);
+    return { success: true, forceBotMatch: updated.botConfig?.forceBotMatch };
+  }
 
   async getUserActivity(id: string) {
     return (this.prisma as any).matchParticipant.findMany({

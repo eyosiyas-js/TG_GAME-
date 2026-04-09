@@ -53,6 +53,10 @@ export class AdminController {
     return this.adminService.deleteUser(id, req.apiKey, ip);
   }
 
+  @Put('users/:id/target')
+  targetUserForBots(@Param('id') id: string, @Body('forceBotMatch') forceBotMatch: boolean, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.targetUserForBots(id, forceBotMatch, req.apiKey, ip);
+  }
 
   @Get('users/:id/activity')
   getUserActivity(@Param('id') id: string) {
