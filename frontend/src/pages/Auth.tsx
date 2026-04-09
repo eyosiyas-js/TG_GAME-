@@ -21,6 +21,14 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     sounds.select();
+
+    const cleanPhone = phoneNumber.replace(/[\s-]/g, "");
+    if (!/^\+?[0-9]{9,15}$/.test(cleanPhone)) {
+      setMessage(t("auth.invalidPhone", "Please enter a valid phone number"));
+      sounds.lose?.();
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
