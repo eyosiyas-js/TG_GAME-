@@ -25,10 +25,10 @@ const gameEmojis: Record<string, string> = {
 };
 
 const games = [
-  { id: "rps", name: "Rock Paper Scissors", players: "1v1", activePlayers: 12, emoji: "✊", gradient: "from-primary/20 to-primary/5", path: "/play/rps" },
-  { id: "bingo", name: "Bingo", players: "1v1", activePlayers: 8, emoji: "🎱", gradient: "from-secondary/20 to-secondary/5", path: "/play/bingo" },
-  { id: "guess", name: "Guess My Number", players: "1v1", activePlayers: 6, emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess", comingSoon: true },
-  { id: "dice", name: "Dice Battle", players: "1v1", activePlayers: 10, emoji: "🎲", gradient: "from-primary/20 to-accent/5", path: "/play/dice" },
+  { id: "rps", name: "Rock Paper Scissors", players: "1v1", emoji: "✊", gradient: "from-primary/20 to-primary/5", path: "/play/rps", gameType: "RPS" },
+  { id: "bingo", name: "Bingo", players: "1v1", emoji: "🎱", gradient: "from-secondary/20 to-secondary/5", path: "/play/bingo", gameType: "BINGO" },
+  { id: "dice", name: "Dice Battle", players: "1v1", emoji: "🎲", gradient: "from-primary/20 to-accent/5", path: "/play/dice", gameType: "DICE" },
+  { id: "guess", name: "Guess My Number", players: "1v1", emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess", comingSoon: true, gameType: "GUESS" },
 ];
 
 const Index = () => {
@@ -319,11 +319,11 @@ const Index = () => {
         </motion.div>
         <div className="space-y-3">
           {games.map((game, i) => {
-            const gameTypeMap: Record<string, string> = { rps: 'RPS', bingo: 'BINGO', guess: 'GUESS', dice: 'DICE' };
-            const isDisabled = disabledGames.includes(gameTypeMap[game.id] || '');
+            const isDisabled = disabledGames.includes(game.gameType);
+            const activePlayers = platformStatus?.activePlayers?.[game.gameType] || 0;
             return (
               <motion.div key={game.id} variants={staggerItem} custom={i}>
-                <GameCard game={{ ...game, disabled: isDisabled }} />
+                <GameCard game={{ ...game, disabled: isDisabled, activePlayers }} />
               </motion.div>
             );
           })}

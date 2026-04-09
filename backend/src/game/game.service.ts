@@ -259,8 +259,8 @@ export class GameService {
     if (queue.includes(userId)) return null;
 
     // Check if user has enough balance
-    const balance = await this.walletService.getBalance(userId);
-    if (Number(balance) < stake) {
+    const balanceData = await this.walletService.getBalance(userId);
+    if (Number(balanceData.total) < stake) {
       throw new Error('Insufficient funds');
     }
 
@@ -308,8 +308,8 @@ export class GameService {
 
     if (queue.includes(userId)) return null;
 
-    const balance = await this.walletService.getBalance(userId);
-    if (Number(balance) < stake) {
+    const balanceData = await this.walletService.getBalance(userId);
+    if (Number(balanceData.total) < stake) {
       throw new Error('Insufficient funds');
     }
 
