@@ -10,7 +10,7 @@ const DepositPage = () => {
 
   const paymentMethods = [
     { id: "cbe", label: "CBE", icon: Building2, desc: "Commercial Bank of Ethiopia" },
-    { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "CBE Mobile Money" },
+    // { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: "CBE Mobile Money" },
     { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: "Ethio Telecom Mobile Money" },
   ];
 
@@ -23,6 +23,7 @@ const DepositPage = () => {
   const [settings, setSettings] = useState<any>({});
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -36,10 +37,11 @@ const DepositPage = () => {
 
   const handleSubmit = async () => {
     if (amount && method && senderName && receipt) {
+      setIsLoading(true);
       try {
         const token = localStorage.getItem("token");
         if (!token) throw new Error("No token found");
-        
+
         const formData = new FormData();
         formData.append("amount", amount);
         formData.append("method", method);
@@ -48,9 +50,17 @@ const DepositPage = () => {
         formData.append("receipt", receipt);
 
         await api.post("/wallet/deposit", formData, token);
+        setAmount("");
+        setMethod(null);
+        setPaymentId("");
+        setSenderName("");
+        setReceipt(null);
         setSubmitted(true);
       } catch (err: any) {
         alert(err.message);
+      } finally {
+        setIsLoading(false);
+        setShowConfirm(false);
       }
     }
   };
@@ -137,7 +147,7 @@ const DepositPage = () => {
       <AnimatePresence>
         {method && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden space-y-4">
-            
+
             {/* Steps Section */}
             <div className="card-game rounded-xl p-4 space-y-4">
               <p className="text-xs font-display font-bold text-muted-foreground uppercase">{t("deposit.steps")}</p>
@@ -155,7 +165,7 @@ const DepositPage = () => {
                       {method === "cbe" ? settings.PAY_CBE_1_NAME : method === "cbebirr" ? settings.PAY_CBEBIRR_1_NAME : settings.PAY_TELEBIRR_1_NAME || "Loading..."}
                     </span>
                   </div>
-                  
+
                   <div className="bg-muted rounded-lg p-3 border border-border">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-display font-bold text-foreground text-sm tracking-widest">
@@ -176,30 +186,28 @@ const DepositPage = () => {
             {/* Guide Section */}
             <div className="card-game rounded-xl p-4 space-y-3">
               <p className="text-xs font-display font-bold text-muted-foreground uppercase">{t("deposit.guide")}</p>
-              
-              <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
-                {[1, 2, 3, 4].map(idx => (
-                  <button 
-                    key={idx} 
-                    onClick={() => setSelectedImage(`https://placehold.co/600x400/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`)}
-                    className="flex-shrink-0 w-24 h-16 rounded-md overflow-hidden border border-border hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <img src={`https://placehold.co/150x100/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`} alt="Step Thumbnail" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+
+{/* <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
+  {[1, 2, 3, 4].map(idx => (
+    <button
+      key={idx}
+      onClick={() => setSelectedImage(`https://placehold.co/600x400/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`)}
+      className="flex-shrink-0 w-24 h-16 rounded-md overflow-hidden border border-border hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+    >
+      <img src={`https://placehold.co/150x100/1e293b/38bdf8?text=${method.toUpperCase()}+Step+${idx}`} alt="Step Thumbnail" className="w-full h-full object-cover" />
+    </button>
+  ))}
+</div> */}
 
               <div className="w-full bg-muted rounded-xl aspect-video overflow-hidden border border-border relative">
-                <iframe 
-                  width="100%" 
-                  height="100%" 
-                  src="https://www.youtube.com/embed/dQw4w9WgXcQ" 
-                  title="YouTube video player" 
-                  frameBorder="0" 
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                  allowFullScreen
+                <video 
+                  src="/deposit.MOV" 
+                  controls 
+                  playsInline
                   className="absolute inset-0 w-full h-full"
-                ></iframe>
+                >
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </div>
 
@@ -211,13 +219,13 @@ const DepositPage = () => {
       {method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 mb-4 flex gap-3">
-             <div className="w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
-                <span className="text-destructive font-bold">!</span>
-             </div>
-             <div>
-                <p className="text-xs font-bold text-destructive mb-1 uppercase tracking-wider">{t("deposit.crucialRequirement")}</p>
-                <p className="text-xs text-destructive/80 leading-relaxed font-medium">{t("deposit.senderWarning")}</p>
-             </div>
+            <div className="w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+              <span className="text-destructive font-bold">!</span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-destructive mb-1 uppercase tracking-wider">{t("deposit.crucialRequirement")}</p>
+              <p className="text-xs text-destructive/80 leading-relaxed font-medium">{t("deposit.senderWarning")}</p>
+            </div>
           </div>
           <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.sendersName")}</label>
           <input
@@ -265,21 +273,21 @@ const DepositPage = () => {
       {/* Image Modal */}
       <AnimatePresence>
         {selectedImage && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
             onClick={() => setSelectedImage(null)}
           >
-            <motion.div 
-              initial={{ scale: 0.95 }} 
-              animate={{ scale: 1 }} 
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               className="relative max-w-4xl w-full"
               onClick={e => e.stopPropagation()}
             >
-              <button 
+              <button
                 onClick={() => setSelectedImage(null)}
                 className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
               >
@@ -294,16 +302,16 @@ const DepositPage = () => {
       {/* Confirmation Modal */}
       <AnimatePresence>
         {showConfirm && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowConfirm(false)}
           >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="card-game rounded-2xl p-6 max-w-sm w-full text-center relative overflow-hidden"
               onClick={e => e.stopPropagation()}
@@ -313,21 +321,22 @@ const DepositPage = () => {
               </div>
               <h3 className="text-xl font-display font-bold text-foreground mb-2">{t("deposit.confirmDeposit")}</h3>
               <p className="text-sm text-muted-foreground mb-6">{t("deposit.confirmDepositMsg")} <strong className="text-foreground text-base">{amount} ETB</strong> {t("deposit.confirmDepositMsgEnd") || "?"}</p>
-              
+
               <div className="flex gap-3 mt-4">
-                <button 
+                <button
                   onClick={() => setShowConfirm(false)}
                   className="flex-1 py-3 rounded-xl bg-muted text-foreground font-display font-bold text-sm border border-border hover:bg-muted/80 transition-colors"
                 >
                   {t("deposit.noCancel")}
                 </button>
-                <button 
+                <button
                   onClick={() => {
-                    setShowConfirm(false);
                     handleSubmit();
                   }}
-                  className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary hover:opacity-90 transition-opacity"
+                  disabled={isLoading}
+                  className={`flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm glow-primary transition-opacity flex items-center justify-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                 >
+                  {isLoading && <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />}
                   {t("deposit.yesProceed")}
                 </button>
               </div>

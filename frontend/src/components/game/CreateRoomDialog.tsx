@@ -9,6 +9,7 @@ interface CreateRoomDialogProps {
   onCreateRoom: (config: RoomConfig) => void;
   gameName: string;
   isBingo?: boolean;
+  totalBalance?: number;
 }
 
 export interface RoomConfig {
@@ -17,17 +18,31 @@ export interface RoomConfig {
   stake: number;
 }
 
-const CreateRoomDialog = ({ isOpen, onClose, onCreateRoom, gameName, isBingo = false }: CreateRoomDialogProps) => {
+const CreateRoomDialog = ({ isOpen, onClose, onCreateRoom, gameName, isBingo = false, totalBalance = 0 }: CreateRoomDialogProps) => {
   const [roomName, setRoomName] = useState(`${gameName} Room`);
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [stake, setStake] = useState("100");
+  const [error, setError] = useState<string | null>(null);
 
   const minPlayers = 2;
   const maxPlayersLimit = isBingo ? 4 : 2;
   const playerOptions = Array.from({ length: maxPlayersLimit - minPlayers + 1 }, (_, i) => minPlayers + i);
 
   const handleCreate = () => {
-    const stakeNum = parseInt(stake) || 100;
+    const stakeNum = parseInt(stake) || 0;
+    
+    if (stakeNum <= 0) {
+      setError("Please enter a valid stake amount");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    if (stakeNum > totalBalance) {
+      setError(`Insufficient balance. You have ${totalBalance} ETB`);
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     sounds.select();
     onCreateRoom({ name: roomName, maxPlayers, stake: stakeNum });
   };
@@ -52,6 +67,12 @@ const CreateRoomDialog = ({ isOpen, onClose, onCreateRoom, gameName, isBingo = f
                 <X className="w-4 h-4 text-muted-foreground" />
               </motion.button>
             </div>
+
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-[10px] font-display font-bold text-center uppercase tracking-wider">
+                {error}
+              </motion.div>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">

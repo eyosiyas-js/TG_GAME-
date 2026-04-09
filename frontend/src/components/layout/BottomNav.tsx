@@ -9,7 +9,7 @@ const BottomNav = () => {
   const { t } = useTranslation();
 
   const LogoIcon = ({ className }: { className?: string }) => (
-    <img src="/logo.png" className={`object-contain ${className}`} alt="Habt Bet" />
+    <img src="/logo.png" className={`object-contain ${className}`} alt="Habt Games" />
   );
 
   const tabs = [

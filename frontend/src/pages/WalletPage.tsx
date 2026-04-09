@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownLeft, Clock, Plus, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { X, Loader2, Send, User } from "lucide-react";
+import { X, Loader2, Send, User, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -164,8 +164,20 @@ const WalletPage = () => {
         <div className="relative z-10">
           <p className="text-muted-foreground text-xs font-body mb-1">{t("wallet.availableBalance")}</p>
           <h2 className="text-4xl font-display font-extrabold text-foreground mb-4">
-            {isLoading ? "..." : `${Number(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB`}
+            {isLoading ? "..." : `${Number(balance?.total || balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB`}
           </h2>
+          {Number(balance?.bonus) > 0 && (
+            <div className="mt-2 mb-4 flex items-center justify-between bg-black/20 rounded-xl p-3 border border-primary/20 backdrop-blur-sm">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">{t('wallet.withdrawable')}</span>
+                <span className="text-sm font-display font-bold text-white">{Number(balance?.withdrawable || 0).toLocaleString()} <span className="text-xs font-normal">ETB</span></span>
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-[10px] text-primary uppercase font-bold tracking-widest flex items-center justify-end gap-1"><Zap className="w-3 h-3"/> Bonus (Games)</span>
+                <span className="text-sm font-display font-bold text-primary">{Number(balance?.bonus || 0).toLocaleString()} <span className="text-xs font-normal">ETB</span></span>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <Link to="/deposit" className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm">

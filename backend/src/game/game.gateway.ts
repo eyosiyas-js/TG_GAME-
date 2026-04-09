@@ -773,6 +773,13 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       createdAt: Date.now(),
     };
 
+    // Check balance
+    const balance = await this.gameService.getUserTotalBalance(userId);
+    if (balance < data.stake) {
+      socket.emit('roomError', { message: `Insufficient balance. You need at least ${data.stake} ETB.` });
+      return;
+    }
+
     this.rooms.set(room.id, room);
     this.userRooms.set(userId, room.id);
 
@@ -787,7 +794,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(
+  async handleJoinRoom(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { roomId?: string; code?: string; gameType?: string },
   ) {
@@ -824,6 +831,13 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (room.players.find(p => p.userId === userId)) {
       socket.emit('roomError', { message: 'You are already in this room' });
+      return;
+    }
+
+    // Check balance
+    const balance = await this.gameService.getUserTotalBalance(userId);
+    if (balance < room.stake) {
+      socket.emit('roomError', { message: `Insufficient balance for this room's stake of ${room.stake} ETB.` });
       return;
     }
 

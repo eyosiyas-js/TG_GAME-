@@ -8,6 +8,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3005';
+
 const gameRoutes: Record<string, string> = {
   RPS: "/play/rps",
   DICE: "/play/dice",
@@ -47,6 +49,15 @@ const Index = () => {
     queryKey: ["user-stats"],
     queryFn: () => api.get("/game/stats", token),
   });
+
+  const { data: profileData } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: () => api.get("/auth/profile", token),
+  });
+
+  const avatarUrl = profileData?.avatar
+    ? `${API_BASE_URL}${profileData.avatar}`
+    : null;
 
   const [dismissedMatchIds, setDismissedMatchIds] = useState<Set<string>>(new Set());
 
@@ -141,13 +152,29 @@ const Index = () => {
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="flex items-center justify-between mb-6"
           >
-            <div>
-              <motion.p initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-muted-foreground text-xs font-body uppercase tracking-widest">
-                {t("home.welcomeBack")}
-              </motion.p>
-              <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="text-xl font-display font-bold text-foreground">
-                {username}
-              </motion.h1>
+            <div className="flex items-center gap-3">
+              <Link to="/profile">
+                {avatarUrl ? (
+                  <motion.img
+                    src={avatarUrl}
+                    alt={username}
+                    whileHover={{ scale: 1.05 }}
+                    className="w-10 h-10 rounded-full object-cover ring-2 ring-primary/30 shadow-md"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-sm font-display font-extrabold text-primary-foreground shadow-md">
+                    {username[0]?.toUpperCase()}
+                  </div>
+                )}
+              </Link>
+              <div>
+                <motion.p initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-muted-foreground text-xs font-body uppercase tracking-widest">
+                  {t("home.welcomeBack")}
+                </motion.p>
+                <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="text-xl font-display font-bold text-foreground">
+                  {username}
+                </motion.h1>
+              </div>
             </div>
             <Link to="/notifications" className="relative group">
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border border-border/50 group-hover:bg-muted/80">
@@ -232,7 +259,7 @@ const Index = () => {
                  <Zap className="w-3 h-3 text-primary" /> {t("home.availableFunds")}
               </p>
               <motion.h2 className="text-4xl font-display font-extrabold text-white mb-4" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                 {Number(balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
+                 {Number(balance?.total || balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
               </motion.h2>
               <div className="flex gap-4">
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="flex items-center gap-2">

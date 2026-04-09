@@ -45,7 +45,21 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [customStake, setCustomStake] = useState(String(stake));
-  const quickStakeOptions = [50, 100, 300, 500];
+  const { data: platformStatus } = useQuery({
+    queryKey: ["platform-status"],
+    queryFn: () => api.get("/game/platform-status"),
+    refetchInterval: 15000,
+  });
+
+  const { data: balanceData } = useQuery({
+    queryKey: ["user-balance"],
+    queryFn: () => api.get("/wallet/balance"),
+    refetchInterval: 10000,
+  });
+
+  const totalBalance = balanceData?.total || 0;
+
+  const quickStakeOptions = platformStatus?.betAmounts || [50, 100, 300, 500];
 
   // Room state
   const [roomData, setRoomData] = useState<RoomData | null>(null);
@@ -296,24 +310,35 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
 
         {matchType === "quick" ? (
           <div className="flex gap-2">
-            {quickStakeOptions.map((option) => (
-              <motion.button
-                key={option}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  onStakeChange(option);
-                  setCustomStake(String(option));
-                  sounds.tap();
-                }}
-                className={`flex-1 py-3 rounded-xl font-display font-bold text-sm transition-all ${
-                  stake === option
-                    ? "bg-primary text-primary-foreground glow-primary"
-                    : "bg-muted text-muted-foreground border border-border"
-                }`}
-              >
-                {option} ETB
-              </motion.button>
-            ))}
+            {quickStakeOptions.map((option) => {
+              const isAffordable = totalBalance >= option;
+              return (
+                <motion.button
+                  key={option}
+                  whileTap={{ scale: isAffordable ? 0.95 : 1 }}
+                  onClick={() => {
+                    if (!isAffordable) {
+                      setRoomError(t("games.insufficientBalance") || "Insufficient balance");
+                      setTimeout(() => setRoomError(null), 3000);
+                      return;
+                    }
+                    onStakeChange(option);
+                    setCustomStake(String(option));
+                    sounds.tap();
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-display font-bold text-sm transition-all ${
+                    stake === option
+                      ? "bg-primary text-primary-foreground glow-primary"
+                      : isAffordable 
+                        ? "bg-muted text-muted-foreground border border-border"
+                        : "bg-muted/40 text-muted-foreground/40 border border-border/30 cursor-not-allowed grayscale"
+                  }`}
+                >
+                  {option} ETB
+                  {!isAffordable && <Lock className="w-3 h-3 absolute top-1 right-1 opacity-40" />}
+                </motion.button>
+              );
+            })}
           </div>
         ) : (
           <div className="relative" />
@@ -369,9 +394,16 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
       {/* Action buttons */}
       {matchType === "quick" && (
         <motion.button
-          whileTap={{ scale: stake > 0 ? 0.97 : 1 }}
-          onClick={stake > 0 ? onStart : undefined}
-          disabled={stake === 0}
+          whileTap={{ scale: stake > 0 && totalBalance >= stake ? 0.97 : 1 }}
+          onClick={() => {
+            if (stake > totalBalance) {
+              setRoomError(t("games.insufficientBalance") || "Insufficient balance");
+              setTimeout(() => setRoomError(null), 3000);
+              return;
+            }
+            if (stake > 0) onStart();
+          }}
+          disabled={stake === 0 || totalBalance < stake}
           className={`w-full py-4 rounded-2xl font-display font-extrabold text-lg mb-24 transition-all ${
             stake > 0
               ? "bg-primary text-primary-foreground glow-primary"
@@ -393,7 +425,7 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
       )}
 
       <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["global"]} socketRef={socketRef} gameType={gameType} onUnreadMessagesChange={setHasUnreadChat} />
-      <CreateRoomDialog isOpen={createRoomOpen} onClose={() => setCreateRoomOpen(false)} onCreateRoom={handleCreateRoom} gameName={gameName} isBingo={isBingo} />
+      <CreateRoomDialog isOpen={createRoomOpen} onClose={() => setCreateRoomOpen(false)} onCreateRoom={handleCreateRoom} gameName={gameName} isBingo={isBingo} totalBalance={totalBalance} />
     </div>
   );
 };

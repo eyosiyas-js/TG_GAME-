@@ -117,7 +117,7 @@ const Auth = () => {
             transition={{ duration: 3, repeat: Infinity }}
             className="w-24 h-24 rounded-2xl flex items-center justify-center mx-auto mb-4"
           >
-            <img src="/logo.png" alt="Habt Bet Logo" className="w-full h-full object-contain" />
+            <img src="/logo.png" alt="Habt Games Logo" className="w-full h-full object-contain" />
           </motion.div>
           <h1 className="text-2xl font-display font-extrabold text-foreground">
             {mode === "login" ? t("auth.welcomeBack") : mode === "signup" ? t("auth.joinTheGame") : t("auth.resetPassword")}

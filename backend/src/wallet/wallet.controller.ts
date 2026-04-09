@@ -16,6 +16,11 @@ export class WalletController {
     return this.walletService.getBalance(req.user.userId);
   }
 
+  @Get('withdrawable')
+  getWithdrawable(@Request() req) {
+    return this.walletService.getWithdrawableBalance(req.user.userId);
+  }
+
   @Get('deposit-options')
   getDepositOptions() {
     return this.walletService.getDepositOptions();

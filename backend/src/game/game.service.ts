@@ -73,6 +73,18 @@ export class GameService {
     return val === 'true';
   }
 
+  async getActiveBanner() {
+    return (this.prisma as any).banner.findFirst({
+      where: { isActive: true },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async getUserTotalBalance(userId: string): Promise<number> {
+    const w = await this.prisma.wallet.findUnique({ where: { userId } });
+    if (!w) return 0;
+    return Number(w.balance) + Number((w as any).bonusBalance || 0);
+  }
   private applyCommission(totalPot: number, commissionRate: number): { winAmount: number; commission: number } {
     const commission = Math.floor(totalPot * commissionRate * 100) / 100;
     const winAmount = totalPot - commission;
@@ -388,11 +400,26 @@ export class GameService {
 
   async createBingoMatch(playerIds: string[], stake: number, matchType: any = 'QUICK') {
     return this.prisma.$transaction(async (tx) => {
-      // Deduct stakes from all players
+      // Deduct stakes from all players intelligently
       for (const userId of playerIds) {
+        const w = await tx.wallet.findUnique({ where: { userId } });
+        if (!w) throw new Error(`Wallet not found for user ${userId}`);
+
+        const totalPlayable = Number(w.balance) + Number((w as any).bonusBalance || 0);
+        if (totalPlayable < stake) {
+          throw new Error(`Insufficient balance for user ${userId}`);
+        }
+
+        const bonus = Number((w as any).bonusBalance || 0);
+        const deductBonus = Math.min(bonus, stake);
+        const deductMain = stake - deductBonus;
+
         await tx.wallet.update({
           where: { userId },
-          data: { balance: { decrement: stake } },
+          data: { 
+            bonusBalance: { decrement: deductBonus },
+            balance: { decrement: deductMain } 
+          },
         });
         await tx.transaction.create({
           data: { userId, amount: -stake, type: 'STAKE' },
@@ -450,15 +477,29 @@ export class GameService {
 
   async createMatch(p1: string, p2: string, gameType: GameType, stake: number, matchType: any = 'QUICK') {
     return this.prisma.$transaction(async (tx) => {
-      // Deduct stakes
-      await tx.wallet.update({
-        where: { userId: p1 },
-        data: { balance: { decrement: stake } },
-      });
-      await tx.wallet.update({
-        where: { userId: p2 },
-        data: { balance: { decrement: stake } },
-      });
+      // Deduct stakes intelligently
+      const players = [p1, p2];
+      for (const userId of players) {
+        const w = await tx.wallet.findUnique({ where: { userId } });
+        if (!w) throw new Error(`Wallet not found for user ${userId}`);
+
+        const totalPlayable = Number(w.balance) + Number((w as any).bonusBalance || 0);
+        if (totalPlayable < stake) {
+          throw new Error(`Insufficient balance for user ${userId}`);
+        }
+
+        const bonus = Number((w as any).bonusBalance || 0);
+        const deductBonus = Math.min(bonus, stake);
+        const deductMain = stake - deductBonus;
+
+        await tx.wallet.update({
+          where: { userId },
+          data: { 
+            bonusBalance: { decrement: deductBonus },
+            balance: { decrement: deductMain } 
+          },
+        });
+      }
 
       // Log transactions
       await tx.transaction.createMany({

@@ -1,19 +1,83 @@
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Settings, ChevronRight, Star, Target, Loader2 } from "lucide-react";
+import { Trophy, TrendingUp, Settings, ChevronRight, Star, Target, Loader2, Camera } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3005';
 
 const Profile = () => {
   const { t } = useTranslation();
   const token = localStorage.getItem("token") || "";
   const username = localStorage.getItem("username") || "Player";
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   const { data: statsData, isLoading } = useQuery({
     queryKey: ["user-stats"],
     queryFn: () => api.get("/game/stats", token),
   });
+
+  const { data: profileData } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: () => api.get("/auth/profile", token),
+  });
+
+  const avatarUrl = profileData?.avatar
+    ? `${API_BASE_URL}${profileData.avatar}`
+    : null;
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.match(/^image\/(jpg|jpeg|png|gif|webp)$/)) {
+      toast.error("Please select a valid image file (JPG, PNG, GIF, or WebP)");
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be smaller than 5MB");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const result = await api.post("/auth/avatar", formData, token);
+
+      // Update localStorage with new avatar
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        user.avatar = result.avatar;
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+
+      // Invalidate queries to refresh avatar everywhere
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+
+      toast.success("Profile picture updated!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload avatar");
+    } finally {
+      setUploading(false);
+      // Reset so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,9 +119,54 @@ const Profile = () => {
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center mb-8"
       >
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-3xl font-display font-extrabold text-primary-foreground mb-3 shadow-xl">
-          {username[0]?.toUpperCase()}
-        </div>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          onChange={handleAvatarUpload}
+          className="hidden"
+        />
+
+        {/* Avatar with camera overlay */}
+        <motion.button
+          onClick={handleAvatarClick}
+          disabled={uploading}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="relative w-24 h-24 rounded-full mb-3 group cursor-pointer"
+        >
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={username}
+              className="w-24 h-24 rounded-full object-cover shadow-xl ring-2 ring-primary/30"
+            />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-3xl font-display font-extrabold text-primary-foreground shadow-xl">
+              {username[0]?.toUpperCase()}
+            </div>
+          )}
+
+          {/* Camera overlay */}
+          <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {uploading ? (
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            ) : (
+              <Camera className="w-6 h-6 text-white" />
+            )}
+          </div>
+
+          {/* Always-visible camera badge */}
+          <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-lg">
+            {uploading ? (
+              <Loader2 className="w-3.5 h-3.5 text-primary-foreground animate-spin" />
+            ) : (
+              <Camera className="w-3.5 h-3.5 text-primary-foreground" />
+            )}
+          </div>
+        </motion.button>
+
         <h2 className="text-lg font-display font-bold text-foreground">{username}</h2>
         <div className="flex items-center gap-1 mt-1">
           <Star className="w-3.5 h-3.5 text-accent" />

@@ -33,7 +33,8 @@ export class AuthService {
       await tx.wallet.create({
         data: {
           userId: newUser.id,
-          balance: 20.00,
+          balance: 0.00,
+          bonusBalance: 20.00,
         },
       });
 
@@ -167,9 +168,45 @@ export class AuthService {
     }));
   }
 
+  async updateAvatar(userId: string, avatarUrl: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar: avatarUrl },
+    });
+
+    return {
+      avatar: user.avatar,
+      user: {
+        id: user.id,
+        username: user.username,
+        phoneNumber: user.phoneNumber,
+        avatar: user.avatar,
+      },
+    };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, phoneNumber: true, avatar: true, level: true, exp: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return user;
+  }
+
   async signToken(userId: string, username: string | null, phoneNumber: string) {
     const payload = { sub: userId, username, phoneNumber };
     const token = await this.jwt.signAsync(payload);
+
+    // Fetch avatar to include in response
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar: true },
+    });
 
     return {
       access_token: token,
@@ -177,6 +214,7 @@ export class AuthService {
         id: userId,
         username,
         phoneNumber,
+        avatar: user?.avatar || null,
       },
     };
   }

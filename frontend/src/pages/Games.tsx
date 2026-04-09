@@ -60,7 +60,7 @@ const Games = () => {
               className="card-game rounded-2xl p-4 flex items-center gap-3 animate-pulse-glow mb-2"
             >
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center p-2">
-                <img src="/logo.png" className="w-full h-full object-contain drop-shadow" alt="Habt Bet" />
+                <img src="/logo.png" className="w-full h-full object-contain drop-shadow" alt="Habt Games" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-bold text-foreground truncate">{g.gameType}</p>
@@ -127,7 +127,7 @@ const Games = () => {
             );
           }) : (
             <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-2xl border-2 border-dashed border-border flex flex-col items-center">
-               <img src="/logo.png" className="w-12 h-12 mb-2 opacity-30 grayscale" alt="Habt Bet" />
+               <img src="/logo.png" className="w-12 h-12 mb-2 opacity-30 grayscale" alt="Habt Games" />
                <p className="text-sm">{t("games.noMatches")}</p>
             </div>
           )}

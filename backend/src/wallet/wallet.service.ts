@@ -15,6 +15,23 @@ export class WalletService {
       throw new NotFoundException('Wallet not found');
     }
 
+    // Return detailed breakdown
+    return {
+      total: Number(wallet.balance) + Number((wallet as any).bonusBalance),
+      withdrawable: Number(wallet.balance),
+      bonus: Number((wallet as any).bonusBalance)
+    };
+  }
+
+  async getWithdrawableBalance(userId: string) {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
     return wallet.balance;
   }
 
@@ -63,28 +80,35 @@ export class WalletService {
       throw new BadRequestException('Withdrawal method is required');
     }
 
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
-    if (!wallet) {
-      throw new NotFoundException('Wallet not found');
-    }
+    return this.prisma.$transaction(async (tx: any) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      if (!wallet) {
+        throw new NotFoundException('Wallet not found');
+      }
 
-    if (new Decimal(wallet.balance.toString()).lessThan(amount)) {
-      throw new BadRequestException('Insufficient funds');
-    }
+      if (new Decimal(wallet.balance.toString()).lessThan(amount)) {
+        throw new BadRequestException('Insufficient funds');
+      }
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
 
-    return (this.prisma as any).withdrawalRequest.create({
-      data: {
-        userId,
-        amount,
-        method,
-        phoneNumber: (user as any).phoneNumber,
-        status: 'PENDING',
-      },
+      await tx.wallet.update({
+        where: { userId },
+        data: { balance: { decrement: amount } },
+      });
+
+      return tx.withdrawalRequest.create({
+        data: {
+          userId,
+          amount,
+          method,
+          phoneNumber: user.phoneNumber,
+          status: 'PENDING',
+        },
+      });
     });
   }
 

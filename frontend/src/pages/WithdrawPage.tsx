@@ -10,7 +10,7 @@ const WithdrawPage = () => {
   const { t } = useTranslation();
 
   const withdrawMethods = [
-    { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: t("withdraw.withdrawViaCbeBirr") },
+    // { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: t("withdraw.withdrawViaCbeBirr") },
     { id: "telebirr", label: "Telebirr", icon: Smartphone, desc: t("withdraw.withdrawViaTelebirr") },
   ];
 
@@ -21,11 +21,11 @@ const WithdrawPage = () => {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const { data: balance = 0 } = useQuery({
-    queryKey: ["wallet-balance"],
+    queryKey: ["wallet-withdrawable"],
     queryFn: () => {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("No token found");
-      return api.get("/wallet/balance", token);
+      return api.get("/wallet/withdrawable", token);
     },
   });
 
