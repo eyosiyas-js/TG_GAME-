@@ -58,6 +58,11 @@ export class GameService {
   async getDisconnectTimeMs() { return parseInt(await this.getSetting('DISCONNECT_TIMEOUT', '60000'), 10) || 60000; }
   async getBingoQuickPlayers() { return parseInt(await this.getSetting('BINGO_QUICK_PLAYERS', '4'), 10) || 4; }
 
+  async getBetAmounts(): Promise<number[]> {
+    const raw = await this.getSetting('BET_AMOUNTS', '50,100,300,500');
+    return raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+  }
+
   async getCommissionRate(gameType: string): Promise<number> {
     const pct = parseFloat(await this.getSetting(`COMMISSION_${gameType}`, '10'));
     return (isNaN(pct) ? 10 : pct) / 100;
