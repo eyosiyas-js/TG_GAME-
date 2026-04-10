@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Trophy, Zap, Target, TrendingUp, Clock } from "lucide-react";
+import { X, Trophy, Zap, Target, TrendingUp, Clock, Star } from "lucide-react";
 
 interface MatchHistory {
   game: string;
@@ -60,7 +60,6 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
     ? { ...profile, username: playerName, avatar: playerName.charAt(0).toUpperCase() }
     : profile;
 
-  const winRate = Math.round((displayProfile.totalWins / (displayProfile.totalWins + displayProfile.totalLosses)) * 100);
 
   return (
     <AnimatePresence>
@@ -120,7 +119,7 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
               <div className="grid grid-cols-3 gap-2 mb-5">
                 {[
                   { icon: Trophy, label: "Wins", value: displayProfile.totalWins, color: "text-primary" },
-                  { icon: Target, label: "Win Rate", value: `${winRate}%`, color: "text-accent" },
+                  { icon: Star, label: "Level", value: displayProfile.level, color: "text-accent" },
                   { icon: Zap, label: "Streak", value: displayProfile.winStreak, color: "text-secondary" },
                 ].map((stat, i) => (
                   <motion.div
@@ -138,9 +137,8 @@ const PlayerProfileSheet = ({ isOpen, onClose, playerId, playerName }: PlayerPro
               </div>
 
               {/* Extra Stats */}
-              <div className="grid grid-cols-2 gap-2 mb-5">
+              <div className="grid grid-cols-1 gap-2 mb-5">
                 {[
-                  { icon: () => <img src="/logo.png" className="w-4 h-4 object-contain opacity-50 grayscale" alt="Games" />, label: "Games Played", value: displayProfile.gamesPlayed },
                   { icon: TrendingUp, label: "Total Earnings", value: `${displayProfile.totalEarnings.toLocaleString()} ETB` },
                 ].map((stat, i) => (
                   <motion.div

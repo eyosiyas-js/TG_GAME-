@@ -15,6 +15,7 @@ model User {
   level         Int       @default(1)
   exp           Int       @default(0)
   isBot         Boolean   @default(false)
+  bonusMatches  Int       @default(0)
   botConfig     Json?     // { minDelay, maxDelay, winRate, maxConcurrentGames, preferredStakes }
   isBanned      Boolean   @default(false)
   wallet          Wallet?

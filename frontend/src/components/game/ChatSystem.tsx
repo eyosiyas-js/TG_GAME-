@@ -85,7 +85,9 @@ const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentCh
     });
 
     const handleChatHistory = (data: { channel: string; messages: any[] }) => {
-      const parsedChannel = data.channel.split(":")[0] as ChatChannel;
+      let parsedChannelStr = data.channel.split(":")[0];
+      if (parsedChannelStr === "match") parsedChannelStr = "game";
+      const parsedChannel = parsedChannelStr as ChatChannel;
       if (!availableChannels.includes(parsedChannel)) return;
       
       const formattedMessages = data.messages.map(m => ({
@@ -102,7 +104,9 @@ const ChatSystem = ({ isOpen, onClose, availableChannels = ["global"], currentCh
     };
 
     const handleChatMessage = (data: { channel: string; message: any }) => {
-      const parsedChannel = data.channel.split(":")[0] as ChatChannel;
+      let parsedChannelStr = data.channel.split(":")[0];
+      if (parsedChannelStr === "match") parsedChannelStr = "game";
+      const parsedChannel = parsedChannelStr as ChatChannel;
       if (!availableChannels.includes(parsedChannel)) return;
 
       const formattedMsg: ChatMessage = {

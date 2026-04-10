@@ -147,7 +147,7 @@ export class AuthService {
   async getLeaderboard() {
     const users = await this.prisma.user.findMany({
       take: 10,
-      where: { username: { not: null } },
+      where: { username: { not: null }, isBot: false },
       include: {
         wallet: true,
         _count: {
@@ -162,7 +162,7 @@ export class AuthService {
     return users.map((u, i) => ({
       rank: i + 1,
       name: u.username,
-      wins: u._count.matches,
+      wins: u._count.matches + u.bonusMatches,
       earnings: Number(u.wallet?.balance || 0),
       isYou: false,
     }));

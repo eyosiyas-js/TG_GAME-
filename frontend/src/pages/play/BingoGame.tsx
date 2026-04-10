@@ -11,6 +11,7 @@ import PlayerMatchTransition from "@/components/game/PlayerMatchTransition";
 import TurnTimerCountdown from "@/components/game/TurnTimerCountdown";
 import { useMatchTimer } from "@/hooks/useMatchTimer";
 import { getSocket } from "@/lib/socket";
+import { getFullUrl } from "@/lib/api";
 
 type GameState = "lobby" | "matching" | "countdown" | "match-found" | "playing" | "result";
 
@@ -55,6 +56,8 @@ const BingoGame = () => {
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [matchResult, setMatchResult] = useState<any>(null);
   const [queuePlayerCount, setQueuePlayerCount] = useState(0);
+  const matchIdRef = useRef<string | null>(null);
+  const [turnTimerKey, setTurnTimerKey] = useState(0);
 
   // Exit dialog & Disconnect state
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -80,6 +83,7 @@ const BingoGame = () => {
     if (rejoinData) {
       console.log("[BINGO FE] Rejoining from navigation state:", rejoinData);
       setCurrentMatch(rejoinData);
+      matchIdRef.current = rejoinData.matchId;
       setStake(rejoinData.stake || 0);
       if (rejoinData.board) setBoard(rejoinData.board);
       if (rejoinData.calledNumbers) setCalledNumbers(rejoinData.calledNumbers);
@@ -93,9 +97,16 @@ const BingoGame = () => {
       socketRef.current.emit("requestRejoin", { matchId: rejoinData.matchId });
     }
 
+    socketRef.current.on("connect", () => {
+      if (matchIdRef.current) {
+        socketRef.current.emit("requestRejoin", { matchId: matchIdRef.current });
+      }
+    });
+
     socketRef.current.on("matchFound", (match: any) => {
       console.log("[BINGO FE] matchFound:", match);
       setCurrentMatch(match);
+      matchIdRef.current = match.matchId;
       if (match.allPlayers) {
         setAllPlayers(match.allPlayers);
       }
@@ -139,6 +150,7 @@ const BingoGame = () => {
       console.log("[BINGO FE] startTurnTimer:", { isYourTurn: data.isYourTurn, remainingMs: data.remainingMs });
       setTurnDeadline(data.remainingMs ?? null);
       setIsMyTurn(data.isYourTurn === true);
+      setTurnTimerKey(prev => prev + 1);
     });
 
     socketRef.current.on("bingoQueueUpdate", (data: any) => {
@@ -178,6 +190,7 @@ const BingoGame = () => {
     socketRef.current.on("rejoinedMatch", (data: any) => {
       console.log("[BINGO FE] rejoinedMatch via socket:", data);
       setCurrentMatch(data);
+      matchIdRef.current = data.matchId;
       setStake(data.stake || 0);
       if (data.board) setBoard(data.board);
       if (data.calledNumbers) setCalledNumbers(data.calledNumbers);
@@ -327,10 +340,11 @@ const BingoGame = () => {
     setGameState("match-found");
   }, []);
 
+  const { start: startMatchTimer } = timer;
   const handleMatchTransitionComplete = useCallback(() => {
     setGameState("playing");
-    timer.start();
-  }, [timer]);
+    startMatchTimer();
+  }, [startMatchTimer]);
 
   const resetGame = () => {
     setCalledNumbers([]);
@@ -342,10 +356,13 @@ const BingoGame = () => {
     setTurnDeadline(null);
     setMatchResult(null);
     setAllPlayers([]);
+    setCurrentMatch(null);
+    matchIdRef.current = null;
     setServerMyUserId("");
     setQueuePlayerCount(0);
     setShowExitDialog(false);
     setOpponentDisconnected(false);
+    opponentDisconnectedRef.current = false;
     if (disconnectTimerRef.current) {
       clearInterval(disconnectTimerRef.current);
       disconnectTimerRef.current = null;
@@ -447,7 +464,7 @@ const BingoGame = () => {
             <h2 className={`text-3xl font-display font-extrabold ${isWinner ? "text-primary" : "text-destructive"}`}>
               {isWinner ? "YOU WON! 🎉" : "YOU LOST 💀"}
             </h2>
-            {isWinner && matchResult?.commission ? (
+            {matchResult?.commission !== undefined ? (
               <div className="bg-background/50 border border-border rounded-xl p-3 mt-3 w-56 text-left space-y-1.5 flex flex-col">
                 <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>{stake} ETB</span></div>
                 <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>{stake * playerCount} ETB</span></div>
@@ -456,7 +473,11 @@ const BingoGame = () => {
                   <span>-{matchResult.commission} ETB</span>
                 </div>
                 <div className="h-px bg-border my-1 w-full" />
-                <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{matchResult.winAmount - stake} ETB</span></div>
+                {isWinner ? (
+                   <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{matchResult.winAmount - stake} ETB</span></div>
+                ) : (
+                   <div className="flex justify-between text-sm font-bold text-destructive font-display"><span>Net Loss:</span> <span>-{stake} ETB</span></div>
+                )}
               </div>
             ) : (
               <p className="text-muted-foreground mt-1">{isWinner ? `Won +${matchResult?.winAmount ? matchResult.winAmount - stake : stake * (playerCount - 1)} ETB!` : `Lost -${stake} ETB`}</p>
@@ -471,7 +492,7 @@ const BingoGame = () => {
             <div className="flex justify-around flex-wrap gap-4">
               <div className="flex flex-col items-center">
                 {myPlayerInfo?.avatar ? (
-                  <img src={myPlayerInfo.avatar} alt="You" className="w-10 h-10 rounded-xl mb-2 object-cover border border-border" />
+                  <img src={getFullUrl(myPlayerInfo.avatar)} alt="You" className="w-10 h-10 rounded-xl mb-2 object-cover border border-border" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl mb-2 bg-muted flex items-center justify-center border border-border">
                     <User className="w-5 h-5 text-muted-foreground" />
@@ -486,7 +507,7 @@ const BingoGame = () => {
                 <div key={p.userId} className={`flex flex-col items-center ${isForfeited ? 'opacity-40' : ''}`}>
                   <div className="relative">
                     {p.avatar ? (
-                      <img src={p.avatar} alt={p.username} className={`w-10 h-10 rounded-xl mb-2 object-cover border ${isForfeited ? 'border-red-500/50 grayscale' : 'border-border'}`} />
+                      <img src={getFullUrl(p.avatar)} alt={p.username} className={`w-10 h-10 rounded-xl mb-2 object-cover border ${isForfeited ? 'border-red-500/50 grayscale' : 'border-border'}`} />
                     ) : (
                       <div className={`w-10 h-10 rounded-xl mb-2 flex items-center justify-center border ${isForfeited ? 'bg-red-500/10 border-red-500/50' : 'bg-muted border-border'}`}>
                         <User className="w-5 h-5 text-muted-foreground" />
@@ -539,14 +560,14 @@ const BingoGame = () => {
     ...(myPlayerInfo ? [{
       name: "You",
       level: myPlayerInfo.level || 1,
-      avatar: myPlayerInfo.avatar || undefined,
+      avatar: getFullUrl(myPlayerInfo.avatar) || undefined,
       wins: 0,
       streak: 0,
     }] : []),
     ...otherPlayers.map(p => ({
       name: p.username || "Opponent",
       level: p.level || 1,
-      avatar: p.avatar || undefined,
+      avatar: getFullUrl(p.avatar) || undefined,
       wins: 0,
       streak: 0,
     }))
@@ -654,7 +675,7 @@ const BingoGame = () => {
         )}
       </AnimatePresence>
 
-      <TurnTimerCountdown remainingMs={turnDeadline} isMyTurn={isMyTurn} />
+      <TurnTimerCountdown key={turnTimerKey} remainingMs={turnDeadline} isMyTurn={isMyTurn} />
 
       <div className="px-4 pt-6 min-h-screen flex flex-col">
         {/* Header */}
@@ -705,7 +726,7 @@ const BingoGame = () => {
         <div className="flex items-center justify-between mb-4 gap-2">
           <div className="flex-1 card-game rounded-xl p-2.5 flex flex-col items-center">
             {myPlayerInfo?.avatar ? (
-              <img src={myPlayerInfo.avatar} alt="You" className="w-8 h-8 rounded-full mb-1 object-cover border border-border/50" />
+              <img src={getFullUrl(myPlayerInfo.avatar)} alt="You" className="w-8 h-8 rounded-full mb-1 object-cover border border-border/50" />
             ) : (
               <div className="w-8 h-8 rounded-full mb-1 bg-muted flex items-center justify-center">
                 <User className="w-4 h-4 text-muted-foreground" />
@@ -720,7 +741,7 @@ const BingoGame = () => {
             <div key={p.userId} className={`flex-1 card-game rounded-xl p-2.5 flex flex-col items-center ${isForfeited ? 'opacity-40' : ''}`}>
               <div className="relative">
                 {p.avatar ? (
-                  <img src={p.avatar} alt={p.username} className={`w-8 h-8 rounded-full mb-1 object-cover border ${isForfeited ? 'border-red-500/50 grayscale' : 'border-border/50'}`} />
+                  <img src={getFullUrl(p.avatar)} alt={p.username} className={`w-8 h-8 rounded-full mb-1 object-cover border ${isForfeited ? 'border-red-500/50 grayscale' : 'border-border/50'}`} />
                 ) : (
                   <div className={`w-8 h-8 rounded-full mb-1 flex items-center justify-center ${isForfeited ? 'bg-red-500/10' : 'bg-muted'}`}>
                     <User className="w-4 h-4 text-muted-foreground" />

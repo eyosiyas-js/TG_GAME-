@@ -599,6 +599,7 @@ export class GameService {
             });
             (updatedMatch as any).winAmount = winAmount;
             (updatedMatch as any).commission = commission;
+            await this.updateUserLevel(tx, winnerId);
             return updatedMatch;
           });
         }
@@ -634,6 +635,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       }
 
       const updatedMatch = await tx.match.findUnique({
@@ -1097,7 +1099,9 @@ export class GameService {
            moves: finishedMatch.moves, 
            winnerId: finishedMatch.winnerId, 
            participants: finishedMatch.participants, 
-           stake: finishedMatch.stake 
+           stake: finishedMatch.stake,
+           winAmount: (finishedMatch as any).winAmount,
+           commission: (finishedMatch as any).commission,
          };
       }
       return { status: 'error' };
@@ -1196,6 +1200,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({ where: { userId: p.userId }, data: { balance: { increment: stake } } });
@@ -1308,6 +1313,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({
@@ -1336,6 +1342,17 @@ export class GameService {
         (updatedMatch as any).commission = commission;
       }
       return updatedMatch;
+    });
+  }
+
+  private async updateUserLevel(tx: any, userId: string) {
+    const wins = await tx.match.count({
+      where: { winnerId: userId, status: 'FINISHED' }
+    });
+    const newLevel = 1 + Math.floor(wins / 20);
+    await tx.user.update({
+      where: { id: userId },
+      data: { level: newLevel }
     });
   }
 }

@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, MessageCircle, Users, Dices, RotateCcw, Check, Timer, WifiOff } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, getFullUrl } from "@/lib/api";
 import MatchLobby from "@/components/game/MatchLobby";
 import { ConfettiExplosion, PageTransition, AnimatedCounter, sounds, useScreenShake } from "@/components/game/AnimationEffects";
 import ChatSystem from "@/components/game/ChatSystem";
@@ -56,8 +57,12 @@ const DiceFace = ({ value, rolling, landed }: { value: number; rolling: boolean;
 );
 
 const DiceBattle = () => {
+  const location = useLocation();
+  const rejoinData = (location.state as any)?.rejoin;
+
   const [gameState, setGameState] = useState<GameState>("lobby");
   const [stake, setStake] = useState(0);
+  const [turnTimerKey, setTurnTimerKey] = useState(0);
   const [playerDice, setPlayerDice] = useState<[number, number]>([0, 0]);
   const [rollCount, setRollCount] = useState(0);
   const [turnScore, setTurnScore] = useState(0);
@@ -78,7 +83,7 @@ const DiceBattle = () => {
   const [profilePlayer, setProfilePlayer] = useState<string | null>(null);
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
   const [disconnectCountdown, setDisconnectCountdown] = useState(0);
-  const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const disconnectTimerRef = useRef<any>(null);
   const timer = useMatchTimer();
 
   const [currentMatch, setCurrentMatch] = useState<any>(null);
@@ -91,6 +96,22 @@ const DiceBattle = () => {
 
   useEffect(() => {
     socketRef.current = getSocket();
+
+    socketRef.current.on("connect", () => {
+      const matchData = matchRef.current;
+      const mId = matchData?.id || matchData?.matchId;
+      if (mId) {
+        socketRef.current.emit("requestRejoin", { matchId: mId });
+      }
+    });
+
+    if (rejoinData) {
+      setCurrentMatch(rejoinData);
+      matchRef.current = rejoinData;
+      setStake(rejoinData.stake || 0);
+      setGameState("match-found");
+      socketRef.current.emit("requestRejoin", { matchId: rejoinData.matchId });
+    }
 
     socketRef.current.on("matchFound", (match: any) => {
       setCurrentMatch(match);
@@ -162,6 +183,7 @@ const DiceBattle = () => {
 
     socketRef.current.on("startTurnTimer", (data: any) => {
       setTurnDeadline(data.remainingMs ?? null);
+      setTurnTimerKey(prev => prev + 1);
     });
 
     socketRef.current.on("diceUpdate", (data: any) => {
@@ -254,6 +276,30 @@ const DiceBattle = () => {
       }
     });
 
+    socketRef.current.on("rejoinedMatch", (data: any) => {
+      setCurrentMatch(data);
+      matchRef.current = data;
+      setStake(data.stake || 0);
+
+      // Handle DICE rejoin state
+      if (data.diceState) {
+        const ds = data.diceState;
+        setTurnScore(ds.myScore);
+        setRollCount(ds.myRolls);
+        setMyDone(ds.myDone);
+        setOpponentScore(ds.opponentScore);
+        setOpponentRolls(ds.opponentRolls);
+        setOpponentDone(ds.opponentDone);
+        if (ds.myLastRoll && ds.myLastRoll[0]) setPlayerDice(ds.myLastRoll);
+        if (ds.opponentLastRoll && ds.opponentLastRoll[0]) setOpponentRoll(ds.opponentLastRoll);
+        setLanded(true);
+      }
+
+      if (gameState === "lobby" || gameState === "matching") {
+        setGameState("playing");
+      }
+    });
+
     // Dual-disconnect: this player rejoined but the opponent is still gone.
     // Show the waiting overlay rather than resuming.
     socketRef.current.on("opponentStillDisconnected", (data: any) => {
@@ -284,6 +330,7 @@ const DiceBattle = () => {
     queryClient.fetchQuery({ queryKey: ["active-match"], queryFn: () => api.get("/game/active-match", token) }).then((match) => {
       if (match && match.gameType === "DICE") {
         setCurrentMatch(match);
+        matchRef.current = match;
         setGameState("playing");
         setStake(match.stake);
         
@@ -323,10 +370,11 @@ const DiceBattle = () => {
     setGameState("match-found");
   }, []);
 
+  const { start: startMatchTimer } = timer;
   const handleMatchTransitionComplete = useCallback(() => {
     setGameState("playing");
-    timer.start();
-  }, [timer]);
+    startMatchTimer();
+  }, [startMatchTimer]);
 
   const doRoll = useCallback((action: 'roll' | 'roll_again' | 'keep') => {
     if (rolling || myDone) return;
@@ -385,6 +433,11 @@ const DiceBattle = () => {
     setShowConfetti(false);
     setTurnDeadline(null);
     setShowExitDialog(false);
+    setOpponentDisconnected(false);
+    if (disconnectTimerRef.current) {
+      clearInterval(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
     timer.reset();
     setGameState("lobby");
   };
@@ -499,7 +552,7 @@ const DiceBattle = () => {
               {currentMatch?.reason === 'forfeit' && !isWinner && (
                 <p className="text-sm font-bold text-destructive mt-2">You forfeited the match.</p>
               )}
-              {isWinner && currentMatch?.commission ? (
+              {currentMatch?.commission !== undefined ? (
                 <div className="bg-background/50 border border-border rounded-xl p-3 mt-4 mx-auto w-56 text-left space-y-1.5 flex flex-col">
                   <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>{stake} ETB</span></div>
                   <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>{stake * 2} ETB</span></div>
@@ -508,7 +561,13 @@ const DiceBattle = () => {
                     <span>-{currentMatch.commission} ETB</span>
                   </div>
                   <div className="h-px bg-border my-1 w-full" />
-                  <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{currentMatch.winAmount - stake} ETB</span></div>
+                  {isWinner ? (
+                    <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{currentMatch.winAmount - stake} ETB</span></div>
+                  ) : isDraw ? (
+                    <div className="flex justify-between text-sm font-bold text-foreground font-display"><span>Net Profit:</span> <span>0 ETB</span></div>
+                  ) : (
+                    <div className="flex justify-between text-sm font-bold text-destructive font-display"><span>Net Loss:</span> <span>-{stake} ETB</span></div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground mt-3">
@@ -610,7 +669,7 @@ const DiceBattle = () => {
               level: p.level || 1,
               wins: p.wins || 0,
               streak: p.streak || 0,
-              avatar: p.avatar,
+              avatar: getFullUrl(p.avatar),
               userId: p.userId
             }))}
           />
@@ -740,7 +799,7 @@ const DiceBattle = () => {
       </div>
 
       {/* Only show the turn timer after at least one player has rolled — prevents penalizing players for initial load delays */}
-      <TurnTimerCountdown remainingMs={rollCount > 0 || opponentRolls > 0 ? turnDeadline : null} isMyTurn={!myDone} />
+      <TurnTimerCountdown key={turnTimerKey} remainingMs={rollCount > 0 || opponentRolls > 0 ? turnDeadline : null} isMyTurn={!myDone} />
 
       <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" socketRef={socketRef} gameType="DICE" matchId={currentMatch?.matchId} onUnreadMessagesChange={setHasUnreadChat} />
       <PlayerProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} playerName={profilePlayer} />

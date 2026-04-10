@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench } from "lucide-react";
+import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench, Star } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import GameCard from "@/components/GameCard";
 import { staggerContainer, staggerItem } from "@/components/game/AnimationEffects";
@@ -270,9 +270,9 @@ const Index = () => {
                 </motion.div>
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-                    <Users className="w-3.5 h-3.5 text-accent" />
+                    <Star className="w-3.5 h-3.5 text-accent" />
                   </div>
-                  <span className="text-xs font-semibold text-foreground/80">{statsData?.winRate || 0}% {t("home.winRate")}</span>
+                  <span className="text-xs font-semibold text-foreground/80">{t("home.level")} {profileData?.level || 1}</span>
                 </motion.div>
               </div>
             </div>

@@ -88,9 +88,8 @@ const Profile = () => {
   }
 
   const stats = [
-    { label: t("profile.gamesLabel"), value: statsData?.totalMatches || 0, icon: () => <img src="/logo.png" className="w-4 h-4 object-contain brightness-0 invert opacity-70" alt="Games" />, color: "text-secondary" },
     { label: t("profile.winsLabel"), value: statsData?.wins || 0, icon: Trophy, color: "text-primary" },
-    { label: t("profile.winRateLabel"), value: `${statsData?.winRate || 0}%`, icon: TrendingUp, color: "text-accent" },
+    { label: t("profile.levelLabel"), value: profileData?.level || 1, icon: Star, color: "text-accent" },
     { label: t("profile.streakLabel"), value: statsData?.streak || 0, icon: Target, color: "text-primary" },
   ];
 
@@ -179,7 +178,7 @@ const Profile = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="grid grid-cols-4 gap-2 mb-8"
+        className="grid grid-cols-3 gap-2 mb-8"
       >
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="card-game rounded-xl p-3 flex flex-col items-center gap-1 border border-border/50 shadow-sm">
