@@ -8,21 +8,18 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BotPlayerClient } from './bot-player.client';
 
 const ETHIOPIAN_MALE_NAMES = [
-  "Abebe", "Tesfaye", "Yohannes", "Dawit", "Solomon", "Mekonnen", "Haile", "Tadesse", "Berhanu", "Getachew", "Alemayehu", "Girma", "Fikru", "Nigussie", "Kifle", "Worku", "Kebede", "Dejene", "Tamiru", "Yared", "Asfaw", "Bekele", "Endale", "Hailu", "Tefera", "Desta", "Mulatu", "Belay", "Teshome", "Melaku", "Fisseha", "Admassu", "Gemechu", "Kassahun", "Habtamu", "Tsegaye", "Sisay", "Wondimu", "Amanuel", "Henok", "Nahom", "Bereket", "Natnael", "Eyob", "Robel", "Yonatan", "Ephrem", "Surafel", "Fitsum", "Nahusenay", "Dawud", "Iskinder", "Ermias", "Abiy", "Rediet", "Filmon", "Simon", "Mikael", "Gabriel", "Samuel", "Daniel", "Elias", "Kidus", "Bisrat", "Tewodros", "Zerihun", "Tesfalem", "Biruk", "Ashenafi", "Tamrat"
+  "abe", "tesgish", "yoni", "dawit", "solomon", "mekonnen", "haile", "tadesse", "berhanu", "getachew", "alemayehu", "girma", "fikru", "nigussie", "kifle", "worku", "kebede", "dejene", "tamiru", "yared", "asfaw", "bekele", "endale", "hailu", "tefera", "desta", "mulatu", "belay", "teshome", "melaku", "fisseha", "admassu", "gemechu", "kassahun", "habtamu", "tsegaye", "sisay", "wondimu", "amanuel", "henok", "nahom", "bereket", "natnael", "eyob", "robel", "yonatan", "ephrem", "surafel", "fitsum", "nahusenay", "dawud", "iskinder", "ermias", "abiy", "rediet", "filmon", "simon", "mikael", "gabriel", "samuel", "daniel", "elias", "kidus", "bisrat", "tewodros", "zerihun", "tesfalem", "biruk", "ashenafi", "tamrat"
 ];
 
 const ETHIOPIAN_FEMALE_NAMES = [
-  "Selam", "Meskrem", "Rahel", "Hana", "Bethlehem", "Eden", "Saba", "Tsion", "Mahlet", "Birtukan", "Fikirte", "Genet", "Lemlem", "Meseret", "Almaz", "Tigist", "Hewan", "Samrawit", "Meron", "Eyerusalem", "Zewditu", "Roman", "Kidist", "Wubit", "Saron", "Mimi", "Sosina", "Meaza", "Hiwot", "Selamawit"
+  "selu", "meskrem", "rahel", "hana", "bethlehem", "eden", "saba", "tsion", "mahlet", "birtukan", "fikirte", "genet", "lemlem", "meseret", "almaz", "tigist", "hewan", "samrawit", "meron", "eyerusalem", "zewditu", "roman", "kidist", "wubit", "saron", "mimi", "sosina", "meaza", "hiwot", "selamawit"
 ];
 
 function getRandomEthiopianName() {
   const isMale = Math.random() > 0.3;
   const firstNames = isMale ? ETHIOPIAN_MALE_NAMES : ETHIOPIAN_FEMALE_NAMES;
-  const lastNames = ETHIOPIAN_MALE_NAMES;
-
-  const first = firstNames[Math.floor(Math.random() * firstNames.length)];
-  const last = lastNames[Math.floor(Math.random() * lastNames.length)];
-  return `${first} ${last}`;
+  const first = firstNames[Math.floor(Math.random() * firstNames.length)].toLowerCase();
+  return first;
 }
 
 @Injectable()
@@ -39,20 +36,18 @@ export class BotPoolManager implements OnModuleInit {
     private gameGateway: GameGateway,
     private walletService: WalletService,
     private botPlayerClient: BotPlayerClient,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.logger.log('BotPoolManager initialized');
-    
-    // Rename existing bots with generic names
-    const allBots = await this.prisma.user.findMany({ where: { isBot: true } });
+
+    // Rename ALL existing bots on startup to cycle names continuously and fix incorrect ones
+    const allBots = await (this.prisma as any).user.findMany({ where: { isBot: true } });
     for (const bot of allBots) {
-      if (!bot.username || bot.username.startsWith('Player_bot') || bot.username.startsWith('Bot_') || bot.username.includes('bot_')) {
-        await this.prisma.user.update({
-          where: { id: bot.id },
-          data: { username: getRandomEthiopianName() }
-        });
-      }
+      await (this.prisma as any).user.update({
+        where: { id: bot.id },
+        data: { username: getRandomEthiopianName() }
+      });
     }
 
     // Automated Bot Provisioning
@@ -65,7 +60,7 @@ export class BotPoolManager implements OnModuleInit {
         const key = `BOT_TARGET_COUNT_${gameType}_${botType}`;
         const setting = await (this.prisma as any).systemSetting.findUnique({ where: { key } });
         const targetCount = setting ? parseInt(setting.value) : 4;
-        
+
         await this.ensureBotsExist(targetCount, botType, gameType);
       }
     }
@@ -89,11 +84,11 @@ export class BotPoolManager implements OnModuleInit {
 
   async ensureBotsExist(count: number = 5, botType: string = 'NORMAL', gameType: string = 'BINGO') {
     const bots = await this.prisma.user.findMany({ where: { isBot: true } });
-    const existingCount = bots.filter((b: any) => 
-      (b.botConfig as any)?.botType === botType && 
+    const existingCount = bots.filter((b: any) =>
+      (b.botConfig as any)?.botType === botType &&
       (b.botConfig as any)?.gameType === gameType
     ).length;
-    
+
     if (existingCount < count) {
       this.logger.log(`Spawning ${count - existingCount} new bots of type ${botType} for ${gameType}...`);
       for (let i = 0; i < count - existingCount; i++) {
@@ -121,12 +116,12 @@ export class BotPoolManager implements OnModuleInit {
         } as any,
       } as any,
     });
-    
+
     // Initial balance
     await this.prisma.wallet.create({
       data: { userId: bot.id, balance: 10000 },
     });
-    
+
     return bot;
   }
 
@@ -134,7 +129,7 @@ export class BotPoolManager implements OnModuleInit {
     this.logger.log(`Manually adding ${count} new bots of type ${botType} for ${gameType}...`);
     const results: any[] = [];
     for (let i = 0; i < count; i++) {
-        results.push(await this.spawnBot(botType, gameType));
+      results.push(await this.spawnBot(botType, gameType));
     }
     return results;
   }
@@ -146,7 +141,7 @@ export class BotPoolManager implements OnModuleInit {
     if (!this.isActive) return;
 
     const gameTypes: GameType[] = ['BINGO', 'RPS', 'DICE'];
-    
+
     for (const gType of gameTypes) {
       // 1. Check Matching Queues
       const queues = await (this.gameService as any).getWaitingQueues(gType);
@@ -157,48 +152,6 @@ export class BotPoolManager implements OnModuleInit {
         if (queue.playerCount > 0 && queue.playerCount < 4) {
           this.logger.log(`Found waiting players in ${queue.gameType} queue (Stake: ${queue.stake}). Attempting to assign bot...`);
           await this.assignBotToQueue(queue.gameType, queue.stake);
-        }
-      }
-
-      // 2. Check Public Rooms
-      if (this.gameGateway) {
-        const publicRooms = (this.gameGateway as any).getPublicRooms();
-        for (const room of publicRooms) {
-          if (room.gameType === gType && room.players.length > 0 && room.players.length < room.maxPlayers) {
-            // Join if no bots are already in this room to avoid bot-only rooms
-            const hasBot = room.players.some((p: any) => p.userId.startsWith('bot_') || p.username.includes('bot'));
-            if (!hasBot) {
-              this.logger.log(`Found waiting players in ${gType} room ${room.name} (${room.id}). Assigning bot...`);
-              await this.assignBotToRoom(room.id, room.stake, room.gameType);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private async assignBotToRoom(roomId: string, stake: number, gameType: string) {
-    const bots = await (this.prisma as any).user.findMany({
-      where: { isBot: true, isBanned: false },
-      include: { wallet: true },
-    });
-
-    const activeBots = bots.filter((b: any) => 
-      (b.botConfig as any)?.enabled !== false &&
-      (b.botConfig as any)?.gameType === gameType
-    );
-
-    for (const bot of activeBots) {
-      const activeCount = this.activeBots.get(bot.id) || 0;
-      const config = bot.botConfig as any;
-      if (activeCount < (config?.maxConcurrentGames || 1)) {
-        if (Number(bot.wallet?.balance || 0) >= stake) {
-          const joined = (this.gameGateway as any).joinRoomByBot(roomId, bot.id, bot.username || 'Bot');
-          if (joined) {
-            this.activeBots.set(bot.id, activeCount + 1);
-            this.logger.log(`Bot ${bot.username} joined room ${roomId}`);
-            break;
-          }
         }
       }
     }
@@ -215,12 +168,18 @@ export class BotPoolManager implements OnModuleInit {
       (b.botConfig as any)?.gameType === gameType
     );
     
+    // Shuffle the bots to prevent the same bot being picked repeatedly
+    for (let i = activeBots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [activeBots[i], activeBots[j]] = [activeBots[j], activeBots[i]];
+    }
+
     activeBots.sort((a: any, b: any) => {
       const aType = a.botConfig?.botType;
       const bType = b.botConfig?.botType;
       if (aType === 'CHEATER' && bType !== 'CHEATER') return -1;
       if (bType === 'CHEATER' && aType !== 'CHEATER') return 1;
-      return 0;
+      return 0; // retains shuffled order for non-cheaters safely due to stable sort
     });
 
     for (const bot of activeBots) {
@@ -261,10 +220,10 @@ export class BotPoolManager implements OnModuleInit {
     const bots = await (this.prisma as any).user.findMany({
       where: { isBot: true },
       orderBy: { id: 'asc' }, // Stable sorting to prevent jumping
-      include: { 
+      include: {
         wallet: true,
-        matches: { 
-          where: { match: { status: 'FINISHED' } }, 
+        matches: {
+          where: { match: { status: 'FINISHED' } },
           include: { match: true },
           take: 10,
           orderBy: { match: { createdAt: 'desc' } }
@@ -310,7 +269,7 @@ export class BotPoolManager implements OnModuleInit {
   async deleteBot(botId: string) {
     const existing = await this.prisma.user.findUnique({ where: { id: botId } });
     if (!existing || !existing.isBot) throw new Error('Bot not found');
-    
+
     // Permanent Hard-Delete including all relations
     await this.prisma.$transaction([
       (this.prisma as any).matchMove.deleteMany({ where: { userId: botId } }),

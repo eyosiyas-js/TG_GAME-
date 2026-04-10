@@ -268,9 +268,11 @@ export class GameService {
     if (user && (user.botConfig as any)?.forceBotMatch) {
       const bots = await this.prisma.user.findMany({ where: { isBot: true, isBanned: false } });
       const targetType = (user.botConfig as any)?.targetBotType || 'NORMAL';
-      const eligibleBot = bots.find(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === gameType) || bots.find(b => b.isBot);
+      let eligibleBots = bots.filter(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === gameType);
+      if (eligibleBots.length === 0) eligibleBots = bots.filter(b => b.isBot);
       
-      if (eligibleBot) {
+      if (eligibleBots.length > 0) {
+        const eligibleBot = eligibleBots[Math.floor(Math.random() * eligibleBots.length)];
         return this.createMatch(userId, eligibleBot.id, gameType, stake);
       }
     }
@@ -324,6 +326,10 @@ export class GameService {
         eligibleBots = bots.filter(b => b.isBot);
       }
       if (eligibleBots.length >= requiredPlayers - 1) {
+        for (let i = eligibleBots.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [eligibleBots[i], eligibleBots[j]] = [eligibleBots[j], eligibleBots[i]];
+        }
         const botIds = eligibleBots.slice(0, requiredPlayers - 1).map(b => b.id);
         return this.createBingoMatch([userId, ...botIds], stake, 'QUICK');
       }
