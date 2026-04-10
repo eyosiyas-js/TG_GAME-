@@ -36,6 +36,24 @@ export class GameController {
     return this.gameService.getActiveMatches();
   }
 
+  private activePlayerCache: { counts: Record<string, number>; generatedAt: number } | null = null;
+
+  private getActivePlayers(): Record<string, number> {
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    if (!this.activePlayerCache || Date.now() - this.activePlayerCache.generatedAt > TWO_HOURS) {
+      this.activePlayerCache = {
+        counts: {
+          RPS: Math.floor(Math.random() * 51) + 50,
+          BINGO: Math.floor(Math.random() * 51) + 50,
+          DICE: Math.floor(Math.random() * 51) + 50,
+          GUESS: Math.floor(Math.random() * 51) + 50,
+        },
+        generatedAt: Date.now(),
+      };
+    }
+    return this.activePlayerCache.counts;
+  }
+
   @Get('platform-status')
   async getPlatformStatus() {
     const maintenanceMode = await this.gameService.isMaintenanceMode();
@@ -46,6 +64,8 @@ export class GameController {
         disabledGames.push(gt);
       }
     }
-    return { maintenanceMode, disabledGames };
+    const betAmounts = await this.gameService.getBetAmounts();
+    const activePlayers = this.getActivePlayers();
+    return { maintenanceMode, disabledGames, betAmounts, activePlayers };
   }
 }

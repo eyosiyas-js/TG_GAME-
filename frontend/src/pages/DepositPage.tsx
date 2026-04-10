@@ -240,7 +240,7 @@ const DepositPage = () => {
       {/* Payment ID */}
       {method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
-          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.paymentId")}</label>
+          <label className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-2 block">{t("deposit.paymentId")} (Optional)</label>
           <input
             value={paymentId}
             onChange={(e) => setPaymentId(e.target.value)}

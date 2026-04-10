@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { User, Shield, Trophy, Zap, Crown, Star } from "lucide-react";
 import { sounds } from "@/components/game/AnimationEffects";
+import { getFullUrl } from "@/lib/api";
 
 interface PlayerData {
   name: string;
@@ -131,7 +132,7 @@ const PlayerMatchTransition = ({
                   >
                     <div className="w-full h-full rounded-2xl bg-background flex items-center justify-center overflow-hidden">
                       {player.avatar ? (
-                        <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
+                        <img src={getFullUrl(player.avatar)} alt={player.name} className="w-full h-full object-cover" />
                       ) : (
                         <User className="w-10 h-10 md:w-12 md:h-12 text-muted-foreground" />
                       )}

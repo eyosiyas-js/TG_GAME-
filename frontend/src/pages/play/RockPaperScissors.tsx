@@ -11,6 +11,7 @@ import PlayerMatchTransition from "@/components/game/PlayerMatchTransition";
 import TurnTimerCountdown from "@/components/game/TurnTimerCountdown";
 import { useMatchTimer } from "@/hooks/useMatchTimer";
 import { getSocket } from "@/lib/socket";
+import { getFullUrl } from "@/lib/api";
 
 type Choice = "rock" | "paper" | "scissors" | null;
 type GameState = "lobby" | "matching" | "countdown" | "match-found" | "playing" | "reveal" | "result";
@@ -32,6 +33,7 @@ const RockPaperScissors = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [winAmount, setWinAmount] = useState<number | null>(null);
+  const [commission, setCommission] = useState<number | null>(null);
   const [isMyTurn, setIsMyTurn] = useState(true);
   const { shake, shakeClass } = useScreenShake();
   const [chatOpen, setChatOpen] = useState(false);
@@ -43,8 +45,12 @@ const RockPaperScissors = () => {
   // Match info from server
   const [matchId, setMatchId] = useState<string | null>(null);
   const [myName, setMyName] = useState("You");
+  const [myAvatar, setMyAvatar] = useState<string | null>(null);
   const [opponentName, setOpponentName] = useState("Opponent");
+  const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null);
   const [opponentLevel, setOpponentLevel] = useState(1);
+  const matchIdRef = useRef<string | null>(null);
+  const [turnTimerKey, setTurnTimerKey] = useState(0);
 
   // Exit confirmation dialog
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -65,18 +71,43 @@ const RockPaperScissors = () => {
     // If we got here via rejoin navigation, skip lobby immediately
     if (rejoinData) {
       setMatchId(rejoinData.matchId);
+      matchIdRef.current = rejoinData.matchId;
       setOpponentName(rejoinData.opponentName || "Opponent");
       setOpponentLevel(rejoinData.opponentLevel || 1);
+      
+      const allP = rejoinData.allPlayers || [];
+      const me = allP.find((p: any) => p.userId === localStorage.getItem("userId"));
+      const opp = allP.find((p: any) => p.userId !== localStorage.getItem("userId"));
+      if (me?.avatar) setMyAvatar(me.avatar);
+      if (opp?.avatar) setOpponentAvatar(opp.avatar);
+
       setStake(rejoinData.stake || 200);
       setGameState("playing");
       timer.start();
+      socketRef.current.emit("requestRejoin", { matchId: rejoinData.matchId });
     }
+
+    socketRef.current.on("connect", () => {
+      // If the socket reconnects mid-game (e.g. internet drop while on page)
+      // or if we mounted with an active matchId, notify the server we are on the game screen.
+      if (matchIdRef.current) {
+        socketRef.current.emit("requestRejoin", { matchId: matchIdRef.current });
+      }
+    });
 
     socketRef.current.on("matchFound", (data: any) => {
       setMatchId(data.matchId);
+      matchIdRef.current = data.matchId;
       setMyName(data.yourName || "You");
       setOpponentName(data.opponentName || "Opponent");
       setOpponentLevel(data.opponentLevel || 1);
+      
+      const allP = data.allPlayers || [];
+      const me = allP.find((p: any) => p.userId === localStorage.getItem("userId"));
+      const opp = allP.find((p: any) => p.userId !== localStorage.getItem("userId"));
+      if (me?.avatar) setMyAvatar(me.avatar);
+      if (opp?.avatar) setOpponentAvatar(opp.avatar);
+
       setStake(data.stake || 200);
       setGameState("match-found");
       sounds.matchFound?.();
@@ -108,6 +139,7 @@ const RockPaperScissors = () => {
           setOpponentChoice(serverOpponentMove);
           setResult(serverResult);
           setWinAmount(data.winAmount || null);
+          setCommission(data.commission !== undefined ? data.commission : null);
           setGameState("result");
 
           // Clear the active-match cache so homepage banner disappears
@@ -142,6 +174,7 @@ const RockPaperScissors = () => {
             setOpponentChoice(serverOpponentMove);
             setResult(serverResult);
             setWinAmount(data.winAmount || null);
+            setCommission(data.commission !== undefined ? data.commission : null);
             setGameState("result");
 
             // Clear the active-match cache so homepage banner disappears
@@ -168,6 +201,7 @@ const RockPaperScissors = () => {
 
     socketRef.current.on("startTurnTimer", (data: any) => {
       setTurnDeadline(data.remainingMs ?? null);
+      setTurnTimerKey(prev => prev + 1);
     });
 
     socketRef.current.on("moveAccepted", () => {});
@@ -225,10 +259,32 @@ const RockPaperScissors = () => {
 
     // Rejoin: server tells us we have an active match after socket reconnects
     socketRef.current.on("rejoinedMatch", (data: any) => {
-      setMatchId(data.matchId);
-      setOpponentName(data.opponentName || "Opponent");
-      setOpponentLevel(data.opponentLevel || 1);
-      setStake(data.stake || 200);
+      const userId = localStorage.getItem("userId");
+      if (data && data.gameType === "RPS") {
+        setMatchId(data.matchId);
+        matchIdRef.current = data.matchId;
+        
+        const allP = data.allPlayers || [];
+        const me = allP.find((p: any) => p.userId === userId);
+        const opp = allP.find((p: any) => p.userId !== userId);
+        
+        if (me?.username) setMyName(me.username);
+        if (me?.avatar) setMyAvatar(me.avatar);
+        if (data.opponentName) setOpponentName(data.opponentName);
+        if (data.opponentLevel) setOpponentLevel(data.opponentLevel);
+        if (opp?.avatar) setOpponentAvatar(opp.avatar);
+
+        setStake(data.stake || 0);
+
+        // RPS REJOIN STATE IMPL:
+        if (data.yourMove) {
+          setPlayerChoice(data.yourMove);
+          setIsMyTurn(false);
+        }
+        if (data.opponentHasMoved) {
+          setOpponentHasMoved(true);
+        }
+      }
       if (gameState === "lobby" || gameState === "matching") {
         setGameState("playing");
         // Restore elapsed timer from server-provided match start time
@@ -262,10 +318,11 @@ const RockPaperScissors = () => {
     setGameState("match-found");
   }, []);
 
+  const { start: startMatchTimer } = timer;
   const handleMatchTransitionComplete = useCallback(() => {
     setGameState("playing");
-    timer.start();
-  }, [timer]);
+    startMatchTimer();
+  }, [startMatchTimer]);
 
   const play = (choice: Choice) => {
     if (playerChoice) return;
@@ -283,6 +340,7 @@ const RockPaperScissors = () => {
     setResult(null);
     setShowConfetti(false);
     setMatchId(null);
+    matchIdRef.current = null;
     setOpponentName("Opponent");
     setOpponentLevel(1);
     setShowExitDialog(false);
@@ -322,11 +380,18 @@ const RockPaperScissors = () => {
     setOpponentChoice(null);
     setOpponentHasMoved(false);
     setResult(null);
+    setCommission(null);
     setShowConfetti(false);
     setMatchId(null);
+    matchIdRef.current = null;
     setResultReason(null);
     setTurnDeadline(null);
     setIsMyTurn(true);
+    setOpponentDisconnected(false);
+    if (disconnectTimerRef.current) {
+      clearInterval(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
     setStake(0); // Reset stake for rematch requiring re-selection
     timer.reset();
     setGameState("lobby");
@@ -481,8 +546,8 @@ const RockPaperScissors = () => {
           <PlayerMatchTransition
             onComplete={handleMatchTransitionComplete}
             players={[
-              { name: myName, level: 1, wins: 0, streak: 0 },
-              { name: opponentName, level: opponentLevel, wins: 0, streak: 0 },
+              { name: myName, level: 1, wins: 0, streak: 0, avatar: myAvatar || undefined },
+              { name: opponentName, level: opponentLevel, wins: 0, streak: 0, avatar: opponentAvatar || undefined },
             ]}
           />
         )}
@@ -517,11 +582,17 @@ const RockPaperScissors = () => {
           {/* Opponent Area */}
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center gap-2">
             <motion.div
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center text-xl font-display font-bold text-white relative shadow-lg"
+              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-display font-bold text-white relative shadow-lg"
               animate={gameState === "reveal" ? { scale: [1, 1.05, 1] } : {}}
               transition={{ duration: 0.6, repeat: Infinity }}
             >
-              {opponentName[0]?.toUpperCase()}
+              {opponentAvatar ? (
+                <img src={getFullUrl(opponentAvatar)} alt={opponentName} className="w-16 h-16 rounded-full object-cover shadow-lg" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center text-xl font-display font-bold text-white relative shadow-lg">
+                  {opponentName[0]?.toUpperCase()}
+                </div>
+              )}
               {gameState === "reveal" && (
                 <motion.div className="absolute inset-0 rounded-full border-2 border-primary" animate={{ scale: [1, 1.3], opacity: [0.6, 0] }} transition={{ duration: 0.6, repeat: Infinity }} />
               )}
@@ -568,9 +639,28 @@ const RockPaperScissors = () => {
                     {resultReasonText}
                   </motion.p>
                 )}
-                <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={`text-xl font-display font-bold ${result === "win" ? "text-primary" : result === "lose" ? "text-destructive" : "text-muted-foreground"}`}>
-                  {result === "win" ? `+${winAmount ? winAmount - stake : stake} ETB` : result === "lose" ? `-${stake} ETB` : "0 ETB"}
-                </motion.span>
+                {commission !== null ? (
+                  <div className="bg-background/50 border border-border rounded-xl p-3 mt-4 mx-auto w-56 text-left space-y-1.5 flex flex-col">
+                    <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Stake:</span> <span>{stake} ETB</span></div>
+                    <div className="flex justify-between text-xs text-muted-foreground font-display"><span>Total Pot:</span> <span>{stake * 2} ETB</span></div>
+                    <div className="flex justify-between text-xs text-destructive font-display">
+                      <span>Commission ({Math.round((commission / (stake * 2)) * 100)}%):</span> 
+                      <span>-{commission} ETB</span>
+                    </div>
+                    <div className="h-px bg-border my-1 w-full" />
+                    {result === "win" ? (
+                      <div className="flex justify-between text-sm font-bold text-primary font-display"><span>Net Profit:</span> <span>+{winAmount ? winAmount - stake : stake} ETB</span></div>
+                    ) : result === "draw" ? (
+                      <div className="flex justify-between text-sm font-bold text-foreground font-display"><span>Net Profit:</span> <span>0 ETB</span></div>
+                    ) : (
+                      <div className="flex justify-between text-sm font-bold text-destructive font-display"><span>Net Loss:</span> <span>-{stake} ETB</span></div>
+                    )}
+                  </div>
+                ) : (
+                  <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={`text-xl font-display font-bold ${result === "win" ? "text-primary" : result === "lose" ? "text-destructive" : "text-muted-foreground"}`}>
+                    {result === "win" ? `+${winAmount ? winAmount - stake : stake} ETB` : result === "lose" ? `-${stake} ETB` : "0 ETB"}
+                  </motion.span>
+                )}
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground flex items-center gap-1">
                   <Timer className="w-3 h-3" /> Match duration: {timer.formatted}
                 </motion.p>
@@ -619,7 +709,7 @@ const RockPaperScissors = () => {
         )}
       </div>
 
-      <TurnTimerCountdown remainingMs={turnDeadline} isMyTurn={isMyTurn} />
+      <TurnTimerCountdown key={turnTimerKey} remainingMs={turnDeadline} isMyTurn={isMyTurn} />
 
       <ChatSystem isOpen={chatOpen} onClose={() => setChatOpen(false)} availableChannels={["game", "global"]} currentChannel="game" socketRef={socketRef} gameType="RPS" matchId={matchId || undefined} onUnreadMessagesChange={setHasUnreadChat} />
     </PageTransition>

@@ -8,6 +8,8 @@ import ChatSystem from "@/components/game/ChatSystem";
 import CreateRoomDialog from "@/components/game/CreateRoomDialog";
 import { sounds } from "@/components/game/AnimationEffects";
 import { getSocket } from "@/lib/socket";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 interface MatchLobbyProps {
   gameName: string;
@@ -45,15 +47,16 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [customStake, setCustomStake] = useState(String(stake));
+  const token = localStorage.getItem("token") || "";
   const { data: platformStatus } = useQuery({
     queryKey: ["platform-status"],
-    queryFn: () => api.get("/game/platform-status"),
+    queryFn: () => api.get("/game/platform-status", token),
     refetchInterval: 15000,
   });
 
   const { data: balanceData } = useQuery({
     queryKey: ["user-balance"],
-    queryFn: () => api.get("/wallet/balance"),
+    queryFn: () => api.get("/wallet/balance", token),
     refetchInterval: 10000,
   });
 

@@ -186,8 +186,8 @@ export class BotPoolManager implements OnModuleInit {
       const activeCount = this.activeBots.get(bot.id) || 0;
       const config = (bot as any).botConfig;
       if (activeCount < (config?.maxConcurrentGames || 1)) {
-        const balance = await this.walletService.getBalance(bot.id);
-        if (Number(balance) >= stake) {
+        const balanceData = await this.walletService.getBalance(bot.id);
+        if (Number(balanceData.total) >= stake) {
           this.logger.log(`Assigning bot ${bot.username} to ${gameType} queue with stake ${stake}`);
           try {
             await (this.gameGateway as any).joinQueueByBot(bot.id, gameType, stake);

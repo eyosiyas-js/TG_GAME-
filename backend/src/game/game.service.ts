@@ -58,6 +58,11 @@ export class GameService {
   async getDisconnectTimeMs() { return parseInt(await this.getSetting('DISCONNECT_TIMEOUT', '60000'), 10) || 60000; }
   async getBingoQuickPlayers() { return parseInt(await this.getSetting('BINGO_QUICK_PLAYERS', '4'), 10) || 4; }
 
+  async getBetAmounts(): Promise<number[]> {
+    const raw = await this.getSetting('BET_AMOUNTS', '50,100,300,500');
+    return raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+  }
+
   async getCommissionRate(gameType: string): Promise<number> {
     const pct = parseFloat(await this.getSetting(`COMMISSION_${gameType}`, '10'));
     return (isNaN(pct) ? 10 : pct) / 100;
@@ -259,8 +264,8 @@ export class GameService {
     if (queue.includes(userId)) return null;
 
     // Check if user has enough balance
-    const balance = await this.walletService.getBalance(userId);
-    if (Number(balance) < stake) {
+    const balanceData = await this.walletService.getBalance(userId);
+    if (Number(balanceData.total) < stake) {
       throw new Error('Insufficient funds');
     }
 
@@ -310,8 +315,8 @@ export class GameService {
 
     if (queue.includes(userId)) return null;
 
-    const balance = await this.walletService.getBalance(userId);
-    if (Number(balance) < stake) {
+    const balanceData = await this.walletService.getBalance(userId);
+    if (Number(balanceData.total) < stake) {
       throw new Error('Insufficient funds');
     }
 
@@ -600,6 +605,7 @@ export class GameService {
             });
             (updatedMatch as any).winAmount = winAmount;
             (updatedMatch as any).commission = commission;
+            await this.updateUserLevel(tx, winnerId);
             return updatedMatch;
           });
         }
@@ -635,6 +641,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       }
 
       const updatedMatch = await tx.match.findUnique({
@@ -1098,7 +1105,9 @@ export class GameService {
            moves: finishedMatch.moves, 
            winnerId: finishedMatch.winnerId, 
            participants: finishedMatch.participants, 
-           stake: finishedMatch.stake 
+           stake: finishedMatch.stake,
+           winAmount: (finishedMatch as any).winAmount,
+           commission: (finishedMatch as any).commission,
          };
       }
       return { status: 'error' };
@@ -1197,6 +1206,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION' as any, matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({ where: { userId: p.userId }, data: { balance: { increment: stake } } });
@@ -1309,6 +1319,7 @@ export class GameService {
             data: { userId: winnerId, amount: commission, type: 'COMMISSION', matchId },
           });
         }
+        await this.updateUserLevel(tx, winnerId);
       } else {
         for (const p of match.participants) {
           await tx.wallet.update({
@@ -1337,6 +1348,17 @@ export class GameService {
         (updatedMatch as any).commission = commission;
       }
       return updatedMatch;
+    });
+  }
+
+  private async updateUserLevel(tx: any, userId: string) {
+    const wins = await tx.match.count({
+      where: { winnerId: userId, status: 'FINISHED' }
+    });
+    const newLevel = 1 + Math.floor(wins / 20);
+    await tx.user.update({
+      where: { id: userId },
+      data: { level: newLevel }
     });
   }
 }

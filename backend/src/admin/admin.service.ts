@@ -335,19 +335,9 @@ export class AdminService {
         throw new BadRequestException('Withdrawal not found or not pending');
       }
 
-      const wallet = await (tx as any).wallet.findUnique({ where: { userId: withdrawal.userId } });
-      if (!wallet || Number(wallet.balance) < Number(withdrawal.amount)) {
-        throw new BadRequestException('Insufficient funds');
-      }
-
       await (tx as any).withdrawalRequest.update({
         where: { id },
         data: { status: 'APPROVED' },
-      });
-
-      await (tx as any).wallet.update({
-        where: { userId: withdrawal.userId },
-        data: { balance: { decrement: withdrawal.amount } },
       });
 
       await (tx as any).transaction.create({
@@ -369,12 +359,27 @@ export class AdminService {
   }
 
   async rejectWithdrawal(id: string, reason: string, apiKey: string, ip: string) {
-    const withdrawal = await (this.prisma as any).withdrawalRequest.update({
-      where: { id },
-      data: { status: 'REJECTED' },
+    const withdrawal = await (this.prisma as any).withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal || withdrawal.status !== 'PENDING') {
+      throw new BadRequestException('Withdrawal not found or not pending');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const req = await (tx as any).withdrawalRequest.update({
+        where: { id },
+        data: { status: 'REJECTED' },
+      });
+
+      await (tx as any).wallet.update({
+        where: { userId: req.userId },
+        data: { balance: { increment: req.amount } },
+      });
+
+      return req;
     });
+
     await this.logAction(apiKey, 'REJECT_WITHDRAWAL', id, { reason }, ip);
-    return withdrawal;
+    return result;
   }
 
   async getAllTransactions(page: number, limit: number, status?: string) {

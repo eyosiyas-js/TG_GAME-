@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench } from "lucide-react";
+import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench, Star } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import GameCard from "@/components/GameCard";
 import { staggerContainer, staggerItem } from "@/components/game/AnimationEffects";
@@ -25,10 +25,10 @@ const gameEmojis: Record<string, string> = {
 };
 
 const games = [
-  { id: "rps", name: "Rock Paper Scissors", players: "1v1", activePlayers: 12, emoji: "✊", gradient: "from-primary/20 to-primary/5", path: "/play/rps" },
-  { id: "bingo", name: "Bingo", players: "1v1", activePlayers: 8, emoji: "🎱", gradient: "from-secondary/20 to-secondary/5", path: "/play/bingo" },
-  { id: "guess", name: "Guess My Number", players: "1v1", activePlayers: 6, emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess", comingSoon: true },
-  { id: "dice", name: "Dice Battle", players: "1v1", activePlayers: 10, emoji: "🎲", gradient: "from-primary/20 to-accent/5", path: "/play/dice" },
+  { id: "rps", name: "Rock Paper Scissors", players: "1v1", emoji: "✊", gradient: "from-primary/20 to-primary/5", path: "/play/rps", gameType: "RPS" },
+  { id: "bingo", name: "Bingo", players: "1v1", emoji: "🎱", gradient: "from-secondary/20 to-secondary/5", path: "/play/bingo", gameType: "BINGO" },
+  { id: "dice", name: "Dice Battle", players: "1v1", emoji: "🎲", gradient: "from-primary/20 to-accent/5", path: "/play/dice", gameType: "DICE" },
+  { id: "guess", name: "Guess My Number", players: "1v1", emoji: "🔢", gradient: "from-accent/20 to-accent/5", path: "/play/guess", comingSoon: true, gameType: "GUESS" },
 ];
 
 const Index = () => {
@@ -270,9 +270,9 @@ const Index = () => {
                 </motion.div>
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-                    <Users className="w-3.5 h-3.5 text-accent" />
+                    <Star className="w-3.5 h-3.5 text-accent" />
                   </div>
-                  <span className="text-xs font-semibold text-foreground/80">{statsData?.winRate || 0}% {t("home.winRate")}</span>
+                  <span className="text-xs font-semibold text-foreground/80">{t("home.level")} {profileData?.level || 1}</span>
                 </motion.div>
               </div>
             </div>
@@ -319,11 +319,11 @@ const Index = () => {
         </motion.div>
         <div className="space-y-3">
           {games.map((game, i) => {
-            const gameTypeMap: Record<string, string> = { rps: 'RPS', bingo: 'BINGO', guess: 'GUESS', dice: 'DICE' };
-            const isDisabled = disabledGames.includes(gameTypeMap[game.id] || '');
+            const isDisabled = disabledGames.includes(game.gameType);
+            const activePlayers = platformStatus?.activePlayers?.[game.gameType] || 0;
             return (
               <motion.div key={game.id} variants={staggerItem} custom={i}>
-                <GameCard game={{ ...game, disabled: isDisabled }} />
+                <GameCard game={{ ...game, disabled: isDisabled, activePlayers }} />
               </motion.div>
             );
           })}

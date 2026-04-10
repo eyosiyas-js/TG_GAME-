@@ -22,12 +22,7 @@ const Games = () => {
     queryFn: () => api.get("/game/history", token),
   });
 
-  const { data: activeGames, isLoading: activeLoading } = useQuery({
-    queryKey: ["active-games"],
-    queryFn: () => api.get("/game/active", token),
-  });
-
-  if (historyLoading || activeLoading) {
+  if (historyLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -46,34 +41,6 @@ const Games = () => {
       >
         {t("games.title")}
       </motion.h1>
-
-      {/* Active Games */}
-      {activeGames && activeGames.length > 0 && (
-        <motion.div variants={container} initial="hidden" animate="show" className="mb-8">
-          <motion.h3 variants={item} className="text-sm font-display font-bold text-foreground mb-3">
-            {t("games.currentLobby")}
-          </motion.h3>
-          {activeGames.map((g: any) => (
-            <motion.div
-              key={g.id}
-              variants={item}
-              className="card-game rounded-2xl p-4 flex items-center gap-3 animate-pulse-glow mb-2"
-            >
-              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center p-2">
-                <img src="/logo.png" className="w-full h-full object-contain drop-shadow" alt="Habt Games" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-display font-bold text-foreground truncate">{g.gameType}</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{g.participants.length}/2 {t("games.players")}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-display font-bold text-primary">{Number(g.stake).toLocaleString()} ETB</p>
-                <p className="text-[10px] text-accent uppercase font-bold animate-pulse">{t("games.running")}</p>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
 
       {/* Match History */}
       <motion.div variants={container} initial="hidden" animate="show">

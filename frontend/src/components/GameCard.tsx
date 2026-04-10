@@ -8,7 +8,7 @@ interface GameCardProps {
     id: string;
     name: string;
     players: string;
-    activePlayers: number;
+    activePlayers?: number;
     emoji: string;
     gradient: string;
     path: string;
@@ -75,7 +75,7 @@ const GameCard = ({ game }: GameCardProps) => {
                 >
                   <Users className="w-3 h-3" />
                 </motion.div>
-                <span>{game.activePlayers.toLocaleString()}</span>
+                <span>{(game.activePlayers || 0).toLocaleString()} online</span>
               </div>
             </div>
           )}
