@@ -170,7 +170,12 @@ export class BotPoolManager implements OnModuleInit {
         this.logger.log(`Found ${queues.length} active ${gType} queues`);
       }
       for (const queue of queues) {
+        // Only assign bot if the queue is waiting, not fully populated, and doesn't already have a bot (or strictly restrict Bingo to 1 bot)
         if (queue.playerCount > 0 && queue.playerCount < 4) {
+          if (queue.gameType === 'BINGO' && queue.hasBot) {
+            this.logger.log(`BINGO Queue already contains 1 bot max limit. Skipping...`);
+            continue;
+          }
           this.logger.log(`Found waiting players in ${queue.gameType} queue (Stake: ${queue.stake}). Attempting to assign bot...`);
           await this.assignBotToQueue(queue.gameType, queue.stake);
         }

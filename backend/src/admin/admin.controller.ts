@@ -38,6 +38,11 @@ export class AdminController {
     return this.adminService.getUserDetails(id);
   }
 
+  @Post('users')
+  registerUser(@Body() body: any, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.registerPlayer(body, req.apiKey, ip);
+  }
+
   @Put('users/:id/ban')
   updateUserBan(@Param('id') id: string, @Body() body: UpdateUserBanDto, @Req() req: any, @Ip() ip: string) {
     return this.adminService.updateUserBan(id, body.isBanned, req.apiKey, ip);
@@ -153,6 +158,11 @@ export class AdminController {
   @Get('revenue/overview')
   getRevenueOverview() {
     return this.adminService.getRevenueOverview();
+  }
+
+  @Post('revenue/reset-commissions')
+  resetCommissions(@Req() req: any, @Ip() ip: string) {
+    return this.adminService.resetCommissions(req.apiKey, ip);
   }
 
   @Get('revenue/daily')

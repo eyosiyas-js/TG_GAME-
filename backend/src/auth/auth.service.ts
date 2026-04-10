@@ -45,9 +45,21 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { phoneNumber: dto.phoneNumber },
     });
+
+    if (!user && dto.phoneNumber.startsWith('09')) {
+      user = await this.prisma.user.findUnique({
+        where: { phoneNumber: '+251' + dto.phoneNumber.substring(1) },
+      });
+    }
+
+    if (!user && dto.phoneNumber.startsWith('+2519')) {
+      user = await this.prisma.user.findUnique({
+        where: { phoneNumber: '0' + dto.phoneNumber.substring(4) },
+      });
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');

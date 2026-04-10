@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GameService } from '../game/game.service';
+import * as bcrypt from 'bcrypt';
 import { SendNotificationDto } from './dto/admin.dto';
 
 @Injectable()
@@ -167,6 +168,38 @@ export class AdminService {
     return result;
   }
 
+  async registerPlayer(data: any, apiKey: string, ip: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phoneNumber: data.phoneNumber } });
+    if (existing) throw new ConflictException('Phone number already registered');
+    
+    // Hash exactly as standard auth does
+    const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : await bcrypt.hash('defaultpass123', 10);
+    
+    const user = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          username: data.username,
+          phoneNumber: data.phoneNumber,
+          passwordHash,
+          isBot: false,
+        },
+      });
+
+      await tx.wallet.create({
+        data: {
+          userId: newUser.id,
+          balance: 0.00,
+          bonusBalance: 20.00,
+        },
+      });
+
+      return newUser;
+    });
+
+    await this.logAction(apiKey, 'CREATE_PLAYER', user.id, { username: user.username }, ip);
+    return user;
+  }
+
   async deleteUser(id: string, apiKey: string, ip: string) {
     const user = await (this.prisma as any).user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
@@ -301,6 +334,15 @@ export class AdminService {
     });
     await this.logAction(apiKey, 'REJECT_DEPOSIT', id, { reason }, ip);
     return { success: true };
+  }
+
+  async resetCommissions(apiKey: string, ip: string) {
+    // Drop all strictly 'COMMISSION' flagged transactions
+    await (this.prisma as any).transaction.deleteMany({
+      where: { type: 'COMMISSION' }
+    });
+    await this.logAction(apiKey, 'RESET_COMMISSIONS', 'global', {}, ip);
+    return { success: true, message: 'All commission transactions purged.' };
   }
 
   // ===================== WITHDRAWAL MANAGEMENT =====================

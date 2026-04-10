@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Phone, Lock, Eye, EyeOff, Gamepad2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -17,6 +17,42 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlPhone = searchParams.get("phone");
+    const urlPwd = searchParams.get("pwd");
+
+    if (urlPhone) {
+      setPhoneNumber(urlPhone);
+      if (urlPwd) {
+        setPassword(urlPwd);
+        setLoading(true);
+        api.post("/auth/login", { phoneNumber: urlPhone, password: urlPwd })
+          .then((response) => {
+            localStorage.setItem("token", response.access_token);
+            localStorage.setItem("user", JSON.stringify(response.user));
+            localStorage.setItem("userId", response.user.id);
+            if (response.user.phoneNumber) {
+              localStorage.setItem("phoneNumber", response.user.phoneNumber);
+            }
+            sounds.win();
+
+            if (response.user.username) {
+              localStorage.setItem("username", response.user.username);
+              navigate("/");
+            } else {
+              navigate("/choose-username");
+            }
+          })
+          .catch((err: any) => {
+            setMessage(t("auth.autoLoginFailed") || err.message);
+            setLoading(false);
+            sounds.lose?.();
+          });
+      }
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
