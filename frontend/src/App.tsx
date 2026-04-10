@@ -21,6 +21,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import DepositPage from "./pages/DepositPage";
 import WithdrawPage from "./pages/WithdrawPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import GlobalWalletButton from "./components/layout/GlobalWalletButton";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <GlobalWalletButton />
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/choose-username" element={<ChooseUsername />} />
