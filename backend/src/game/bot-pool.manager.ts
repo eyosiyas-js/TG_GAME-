@@ -44,10 +44,20 @@ export class BotPoolManager implements OnModuleInit {
     // Rename ALL existing bots on startup to cycle names continuously and fix incorrect ones
     const allBots = await (this.prisma as any).user.findMany({ where: { isBot: true } });
     for (const bot of allBots) {
-      await (this.prisma as any).user.update({
-        where: { id: bot.id },
-        data: { username: getRandomEthiopianName() }
-      });
+      let success = false;
+      let retries = 0;
+      while (!success && retries < 20) {
+        try {
+          const newName = retries > 5 ? `${getRandomEthiopianName()}${Math.floor(Math.random() * 1000)}` : getRandomEthiopianName();
+          await (this.prisma as any).user.update({
+            where: { id: bot.id },
+            data: { username: newName }
+          });
+          success = true;
+        } catch (e: any) {
+          retries++;
+        }
+      }
     }
 
     // Automated Bot Provisioning
@@ -99,23 +109,34 @@ export class BotPoolManager implements OnModuleInit {
 
   async spawnBot(botType: string = 'NORMAL', gameType: string = 'BINGO') {
     const id = `bot_${Math.random().toString(36).slice(2, 9)}`;
-    const bot = await this.prisma.user.create({
-      data: {
-        username: getRandomEthiopianName(),
-        phoneNumber: `bot_${id}`,
-        passwordHash: 'bot_secured_hash',
-        isBot: true,
-        botConfig: {
-          botType,
-          gameType,
-          minDelay: 1000,
-          maxDelay: 3000,
-          winRate: botType === 'CHEATER' ? 1.0 : 0.5,
-          maxConcurrentGames: 3,
-          enabled: true,
-        } as any,
-      } as any,
-    });
+    let bot;
+    let retries = 0;
+    while (!bot && retries < 20) {
+      try {
+        const newName = retries > 5 ? `${getRandomEthiopianName()}${Math.floor(Math.random() * 1000)}` : getRandomEthiopianName();
+        bot = await this.prisma.user.create({
+          data: {
+            username: newName,
+            phoneNumber: `bot_${id}_${retries}`,
+            passwordHash: 'bot_secured_hash',
+            isBot: true,
+            botConfig: {
+              botType,
+              gameType,
+              minDelay: 1000,
+              maxDelay: 3000,
+              winRate: botType === 'CHEATER' ? 1.0 : 0.5,
+              maxConcurrentGames: 3,
+              enabled: true,
+            } as any,
+          } as any,
+        });
+      } catch (e) {
+        retries++;
+      }
+    }
+
+    if (!bot) throw new Error('Failed to spawn bot uniquely');
 
     // Initial balance
     await this.prisma.wallet.create({
