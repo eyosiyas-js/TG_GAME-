@@ -29,7 +29,7 @@ export default function GlobalWalletButton() {
         <WalletCards className="w-4 h-4 text-primary shrink-0" />
         <div className="flex flex-col items-start justify-center">
           <span className="text-[9px] text-muted-foreground uppercase leading-none font-bold tracking-wider mb-0.5">Deposit</span>
-          <span className="text-[13px] font-black text-foreground leading-none">{Number((balance?.total ?? balance?.balance ?? balance) || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground">ETB</span></span>
+          <span className="text-[13px] font-black text-foreground leading-none">{(Number(balance?.total ?? balance?.balance ?? (typeof balance === 'number' ? balance : 0)) || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground">ETB</span></span>
         </div>
       </a>
     </div>

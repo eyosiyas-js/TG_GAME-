@@ -164,7 +164,7 @@ const WalletPage = () => {
         <div className="relative z-10">
           <p className="text-muted-foreground text-xs font-body mb-1">{t("wallet.availableBalance")}</p>
           <h2 className="text-4xl font-display font-extrabold text-foreground mb-4">
-            {isLoading ? "..." : `${Number(balance?.total || balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB`}
+            {isLoading ? "..." : `${(Number(balance?.total ?? (typeof balance === 'number' ? balance : 0)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB`}
           </h2>
           {Number(balance?.bonus) > 0 && (
             <div className="mt-2 mb-4 flex items-center justify-between bg-black/20 rounded-xl p-3 border border-primary/20 backdrop-blur-sm">

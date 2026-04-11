@@ -83,7 +83,7 @@ const WithdrawPage = () => {
       {/* Balance */}
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="card-game rounded-xl p-4 mb-6 text-center">
         <p className="text-xs text-muted-foreground">{t("withdraw.availableBalance")}</p>
-        <p className="text-2xl font-display font-extrabold text-foreground">{Number(balance).toLocaleString()} ETB</p>
+        <p className="text-2xl font-display font-extrabold text-foreground">{(Number(balance) || 0).toLocaleString()} ETB</p>
       </motion.div>
 
       {/* Amount */}

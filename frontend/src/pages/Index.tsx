@@ -262,7 +262,7 @@ const Index = () => {
                  <Zap className="w-3 h-3 text-primary" /> {t("home.availableFunds")}
               </p>
               <motion.h2 className="text-4xl font-display font-extrabold text-white mb-4" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                 {Number(balance?.total || balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
+                 {(Number(balance?.total ?? (typeof balance === 'number' ? balance : 0)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
               </motion.h2>
               <div className="flex gap-4">
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="flex items-center gap-2">
