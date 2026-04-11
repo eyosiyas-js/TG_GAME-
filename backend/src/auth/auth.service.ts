@@ -27,6 +27,7 @@ export class AuthService {
         data: {
           phoneNumber: dto.phoneNumber,
           passwordHash,
+          telegramId: dto.telegramId || null,
         },
       });
 
@@ -40,6 +41,22 @@ export class AuthService {
 
       return newUser;
     });
+
+    return this.signToken(user.id, user.username, user.phoneNumber);
+  }
+
+  async telegramLogin(dto: { telegramId: string }) {
+    const user = await this.prisma.user.findUnique({
+      where: { telegramId: dto.telegramId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Telegram account not registered');
+    }
+
+    if (user.isBanned) {
+      throw new UnauthorizedException('Your account has been banned');
+    }
 
     return this.signToken(user.id, user.username, user.phoneNumber);
   }

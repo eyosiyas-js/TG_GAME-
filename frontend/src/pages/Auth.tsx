@@ -22,35 +22,40 @@ const Auth = () => {
     const searchParams = new URLSearchParams(window.location.search);
     const urlPhone = searchParams.get("phone");
     const urlPwd = searchParams.get("pwd");
+    const tgId = searchParams.get("tgId");
 
-    if (urlPhone) {
+    const doLogin = (endpoint: string, payload: any) => {
+      setLoading(true);
+      api.post(endpoint, payload)
+        .then((response) => {
+          localStorage.setItem("token", response.access_token);
+          localStorage.setItem("user", JSON.stringify(response.user));
+          localStorage.setItem("userId", response.user.id);
+          if (response.user.phoneNumber) {
+            localStorage.setItem("phoneNumber", response.user.phoneNumber);
+          }
+          sounds.win();
+
+          if (response.user.username) {
+            localStorage.setItem("username", response.user.username);
+            navigate("/");
+          } else {
+            navigate("/choose-username");
+          }
+        })
+        .catch((err: any) => {
+          setMessage(t("auth.autoLoginFailed") || err.message);
+          setLoading(false);
+          sounds.lose?.();
+        });
+    };
+
+    if (tgId) {
+      doLogin("/auth/telegram-login", { telegramId: tgId });
+    } else if (urlPhone && urlPwd) {
       setPhoneNumber(urlPhone);
-      if (urlPwd) {
-        setPassword(urlPwd);
-        setLoading(true);
-        api.post("/auth/login", { phoneNumber: urlPhone, password: urlPwd })
-          .then((response) => {
-            localStorage.setItem("token", response.access_token);
-            localStorage.setItem("user", JSON.stringify(response.user));
-            localStorage.setItem("userId", response.user.id);
-            if (response.user.phoneNumber) {
-              localStorage.setItem("phoneNumber", response.user.phoneNumber);
-            }
-            sounds.win();
-
-            if (response.user.username) {
-              localStorage.setItem("username", response.user.username);
-              navigate("/");
-            } else {
-              navigate("/choose-username");
-            }
-          })
-          .catch((err: any) => {
-            setMessage(t("auth.autoLoginFailed") || err.message);
-            setLoading(false);
-            sounds.lose?.();
-          });
-      }
+      setPassword(urlPwd);
+      doLogin("/auth/login", { phoneNumber: urlPhone, password: urlPwd });
     }
   }, [navigate]);
 
