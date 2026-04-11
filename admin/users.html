@@ -48,10 +48,11 @@
         </table>
     </div>
 
+    <script src="admin-auth.js"></script>
     <script>
         async function loadUsers() {
             try {
-                const res = await fetch('http://localhost:3005/admin/users');
+                const res = await fetchAdmin('/users');
                 const users = await res.json();
                 const tbody = document.getElementById('users-body');
                 tbody.innerHTML = '';
@@ -78,21 +79,22 @@
             }
         }
 
-        async function updateBalance(id) {
-            const val = document.getElementById(`bal-${id}`).value;
-            await fetch(`http://localhost:3005/admin/users/${id}/balance`, {
+        async function toggleBan(id, isBanned) {
+            await fetchAdmin(`/users/${id}/ban`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ balance: Number(val) })
+                body: JSON.stringify({ isBanned: !isBanned })
             });
             loadUsers();
         }
 
-        async function toggleBan(id, isBanned) {
-            await fetch(`http://localhost:3005/admin/users/${id}/ban`, {
+        async function updateBalance(id) {
+            const balance = prompt('Enter new balance:');
+            if (balance === null) return;
+            await fetchAdmin(`/users/${id}/balance`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isBanned })
+                body: JSON.stringify({ balance: parseFloat(balance) })
             });
             loadUsers();
         }

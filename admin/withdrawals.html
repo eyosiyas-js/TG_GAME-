@@ -53,10 +53,11 @@
         </table>
     </div>
 
+    <script src="admin-auth.js"></script>
     <script>
         async function loadWithdrawals() {
             try {
-                const res = await fetch('http://localhost:3005/admin/withdrawals');
+                const res = await fetchAdmin('/withdrawals');
                 const withdrawals = await res.json();
                 const tbody = document.getElementById('withdrawals-body');
                 tbody.innerHTML = '';
@@ -98,18 +99,20 @@
             }
         }
 
-        async function updateStatus(id, action) {
-            if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) return;
-            
-            try {
-                const res = await fetch(`http://localhost:3005/admin/withdrawals/${id}/${action}`, {
-                    method: 'PUT'
-                });
-                if (!res.ok) throw new Error(await res.text());
-                loadWithdrawals();
-            } catch (e) {
-                alert(`Error: ${e.message}`);
-            }
+        async function approve(id) {
+            if(!confirm('Approve this withdrawal?')) return;
+            await fetchAdmin(`/withdrawals/${id}/approve`, { method: 'PUT' });
+            loadWithdrawals();
+        }
+        async function reject(id) {
+            const reason = prompt('Reason for rejection?');
+            if(!reason) return;
+            await fetchAdmin(`/withdrawals/${id}/reject`, { 
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            loadWithdrawals();
         }
 
         loadWithdrawals();

@@ -7,9 +7,10 @@ export class AdminApiKeyGuard implements CanActivate {
     const apiKey = request.headers['x-admin-api-key'];
     
     // Check against allowed keys from environment
-    const validKeys = process.env.ADMIN_API_KEYS?.split(',') || [];
+    const validKeys = (process.env.ADMIN_API_KEYS || '').split(',').map(k => k.trim());
     
     if (!apiKey || !validKeys.includes(apiKey)) {
+      console.log(`[AdminAuth] Unauthorized attempt. Received: "${apiKey}", Valid keys: ${JSON.stringify(validKeys)}`);
       throw new UnauthorizedException('Invalid API key');
     }
     

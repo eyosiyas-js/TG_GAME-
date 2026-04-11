@@ -189,8 +189,6 @@
             DOM.sendBtn.disabled = true;
             DOM.sendBtn.textContent = 'Sending...';
 
-            const token = localStorage.getItem('token') || '';
-            
             // The backend controller expects `userIds` array for both 'single' and 'multiple'
             const payload = {
                 target,
@@ -201,11 +199,10 @@
             };
 
             try {
-                const res = await fetch('http://localhost:3005/notifications/admin/send', {
+                const res = await fetchAdmin('/notifications/send', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payload)
                 });

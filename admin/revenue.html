@@ -96,22 +96,34 @@
         </table>
     </div>
 
+    <script src="admin-auth.js"></script>
     <script>
-        const API = 'http://localhost:3005';
-
         const gameEmojis = { BINGO: '🎱', RPS: '✊', DICE: '🎲', GUESS: '🔢' };
 
         async function loadRevenue() {
             try {
-                const res = await fetch(`${API}/admin/revenue`);
-                const data = await res.json();
+                const [overviewRes, dailyRes, weeklyRes, monthlyRes, gamesRes, recentRes] = await Promise.all([
+                    fetchAdmin('/revenue/overview'),
+                    fetchAdmin('/revenue/daily'),
+                    fetchAdmin('/revenue/weekly'),
+                    fetchAdmin('/revenue/monthly'),
+                    fetchAdmin('/revenue/games'),
+                    fetchAdmin('/revenue/recent')
+                ]);
+
+                const overview = await overviewRes.json();
+                const daily = await dailyRes.json();
+                const weekly = await weeklyRes.json();
+                const monthly = await monthlyRes.json();
+                const games = await gamesRes.json();
+                const recent = await recentRes.json();
 
                 // Summary cards
-                document.getElementById('total-revenue').textContent = `$${Number(data.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-                document.getElementById('total-count').textContent = `${data.totalCommissions} commissions`;
-                document.getElementById('today-revenue').textContent = `$${Number(data.todayRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-                document.getElementById('week-revenue').textContent = `$${Number(data.weekRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-                document.getElementById('month-revenue').textContent = `$${Number(data.monthRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('total-revenue').textContent = `$${Number(overview.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('total-count').textContent = `${overview.totalCommissions} commissions`;
+                document.getElementById('today-revenue').textContent = `$${Number(daily.revenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('week-revenue').textContent = `$${Number(weekly.revenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                document.getElementById('month-revenue').textContent = `$${Number(monthly.revenue).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
                 // Per-game breakdown
                 const gameBody = document.getElementById('game-revenue-body');

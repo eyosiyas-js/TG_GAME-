@@ -186,9 +186,8 @@
 
     <div id="toast">Settings updated successfully!</div>
 
+    <script src="admin-auth.js"></script>
     <script>
-        const API = 'http://localhost:3005';
-
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.textContent = msg || 'Settings updated successfully!';
@@ -198,7 +197,7 @@
 
         async function loadSettings() {
             try {
-                const res = await fetch(`${API}/admin/settings`);
+                const res = await fetchAdmin('/settings');
                 const settings = await res.json();
 
                 // Game settings
@@ -244,7 +243,7 @@
 
         async function loadMaintenanceStatus() {
             try {
-                const res = await fetch(`${API}/admin/maintenance`);
+                const res = await fetchAdmin('/maintenance');
                 const data = await res.json();
                 const infoEl = document.getElementById('maintenance-info');
                 if (data.maintenanceMode) {
@@ -266,7 +265,7 @@
 
         async function toggleMaintenance() {
             const checked = document.getElementById('maintenance-toggle').checked;
-            await fetch(`${API}/admin/settings`, {
+            await fetchAdmin('/admin/settings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key: 'MAINTENANCE_MODE', value: String(checked) })
@@ -278,67 +277,71 @@
 
         async function toggleGame(gameType) {
             const checked = document.getElementById(`game-${gameType}`).checked;
-            await fetch(`${API}/admin/settings`, {
-                method: 'PUT',
+            const settings = {};
+            settings[`GAME_ENABLED_${gameType}`] = String(checked);
+            
+            await fetchAdmin('/settings/bulk', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: `GAME_ENABLED_${gameType}`, value: String(checked) })
+                body: JSON.stringify(settings)
             });
             showToast(`${gameType} ${checked ? 'enabled' : 'disabled'}`);
         }
 
         async function saveCommissions() {
-            const games = ['BINGO', 'RPS', 'DICE', 'GUESS'];
-            for (const g of games) {
-                const val = document.getElementById(`commission-${g}`).value;
-                await fetch(`${API}/admin/settings`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: `COMMISSION_${g}`, value: val })
-                });
-            }
+            const settings = {
+                COMMISSION_BINGO: document.getElementById('commission-BINGO').value,
+                COMMISSION_RPS: document.getElementById('commission-RPS').value,
+                COMMISSION_DICE: document.getElementById('commission-DICE').value,
+                COMMISSION_GUESS: document.getElementById('commission-GUESS').value
+            };
+            
+            await fetchAdmin('/settings/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
             showToast('Commission rates updated!');
         }
 
         async function saveGameSettings() {
-            const updates = [
-                { key: 'DISCONNECT_TIMEOUT', value: document.getElementById('setting-disconnect').value },
-                { key: 'TURN_TIMER', value: document.getElementById('setting-turn').value },
-                { key: 'BINGO_QUICK_PLAYERS', value: document.getElementById('setting-bingo').value },
-            ];
-            for (const item of updates) {
-                await fetch(`${API}/admin/settings`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item)
-                });
-            }
+            const settings = {
+                DISCONNECT_TIMEOUT: document.getElementById('setting-disconnect').value,
+                TURN_TIMER: document.getElementById('setting-turn').value,
+                BINGO_QUICK_PLAYERS: document.getElementById('setting-bingo').value
+            };
+            
+            await fetchAdmin('/settings/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
             showToast('Game settings updated!');
         }
 
         async function savePaymentSettings() {
-            const updates = [
-                { key: 'PAY_CBE_1_NUM', value: document.getElementById('pm-cbe-1-num').value },
-                { key: 'PAY_CBE_1_NAME', value: document.getElementById('pm-cbe-1-name').value },
-                { key: 'PAY_CBE_2_NUM', value: document.getElementById('pm-cbe-2-num').value },
-                { key: 'PAY_CBE_2_NAME', value: document.getElementById('pm-cbe-2-name').value },
+            const settings = {
+                PAY_CBE_1_NUM: document.getElementById('pm-cbe-1-num').value,
+                PAY_CBE_1_NAME: document.getElementById('pm-cbe-1-name').value,
+                PAY_CBE_2_NUM: document.getElementById('pm-cbe-2-num').value,
+                PAY_CBE_2_NAME: document.getElementById('pm-cbe-2-name').value,
                 
-                { key: 'PAY_CBEBIRR_1_NUM', value: document.getElementById('pm-cbebirr-1-num').value },
-                { key: 'PAY_CBEBIRR_1_NAME', value: document.getElementById('pm-cbebirr-1-name').value },
-                { key: 'PAY_CBEBIRR_2_NUM', value: document.getElementById('pm-cbebirr-2-num').value },
-                { key: 'PAY_CBEBIRR_2_NAME', value: document.getElementById('pm-cbebirr-2-name').value },
+                PAY_CBEBIRR_1_NUM: document.getElementById('pm-cbebirr-1-num').value,
+                PAY_CBEBIRR_1_NAME: document.getElementById('pm-cbebirr-1-name').value,
+                PAY_CBEBIRR_2_NUM: document.getElementById('pm-cbebirr-2-num').value,
+                PAY_CBEBIRR_2_NAME: document.getElementById('pm-cbebirr-2-name').value,
 
-                { key: 'PAY_TELEBIRR_1_NUM', value: document.getElementById('pm-telebirr-1-num').value },
-                { key: 'PAY_TELEBIRR_1_NAME', value: document.getElementById('pm-telebirr-1-name').value },
-                { key: 'PAY_TELEBIRR_2_NUM', value: document.getElementById('pm-telebirr-2-num').value },
-                { key: 'PAY_TELEBIRR_2_NAME', value: document.getElementById('pm-telebirr-2-name').value }
-            ];
-            for (const item of updates) {
-                await fetch(`${API}/admin/settings`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item)
-                });
-            }
+                PAY_TELEBIRR_1_NUM: document.getElementById('pm-telebirr-1-num').value,
+                PAY_TELEBIRR_1_NAME: document.getElementById('pm-telebirr-1-name').value,
+                PAY_TELEBIRR_2_NUM: document.getElementById('pm-telebirr-2-num').value,
+                PAY_TELEBIRR_2_NAME: document.getElementById('pm-telebirr-2-name').value
+            };
+            
+            await fetchAdmin('/settings/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
             showToast('Payment methods updated!');
         }
 

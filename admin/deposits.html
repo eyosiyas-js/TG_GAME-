@@ -89,7 +89,7 @@
 
         async function loadDeposits() {
             try {
-                const res = await fetch('http://localhost:3005/admin/deposits');
+                const res = await fetchAdmin('/deposits');
                 const deposits = await res.json();
                 const tbody = document.getElementById('deposits-body');
                 tbody.innerHTML = '';
@@ -106,8 +106,8 @@
                     let actions = '';
                     if (d.status === 'PENDING') {
                         actions = `
-                            <button onclick="updateStatus('${d.id}', 'approve')">Approve</button>
-                            <button class="danger" onclick="updateStatus('${d.id}', 'reject')">Reject</button>
+                            <button onclick="approve('${d.id}')">Approve</button>
+                            <button class="danger" onclick="reject('${d.id}')">Reject</button>
                         `;
                     }
                     
@@ -133,18 +133,20 @@
             }
         }
 
-        async function updateStatus(id, action) {
-            if (!confirm(`Are you sure you want to ${action} this deposit?`)) return;
-            
-            try {
-                const res = await fetch(`http://localhost:3005/admin/deposits/${id}/${action}`, {
-                    method: 'PUT'
-                });
-                if (!res.ok) throw new Error(await res.text());
-                loadDeposits();
-            } catch (e) {
-                alert(`Error: ${e.message}`);
-            }
+        async function approve(id) {
+            if(!confirm('Approve this deposit?')) return;
+            await fetchAdmin(`/deposits/${id}/approve`, { method: 'PUT' });
+            loadDeposits();
+        }
+        async function reject(id) {
+            const reason = prompt('Reason for rejection?');
+            if(!reason) return;
+            await fetchAdmin(`/deposits/${id}/reject`, { 
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            loadDeposits();
         }
 
         loadDeposits();

@@ -49,10 +49,11 @@
         </table>
     </div>
 
+    <script src="admin-auth.js"></script>
     <script>
         async function loadMatches() {
             try {
-                const res = await fetch('http://localhost:3005/admin/matches');
+                const res = await fetchAdmin('/matches');
                 const matches = await res.json();
                 const tbody = document.getElementById('matches-body');
                 tbody.innerHTML = '';

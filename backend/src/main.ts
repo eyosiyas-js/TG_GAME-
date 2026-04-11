@@ -9,6 +9,7 @@ async function bootstrap() {
   app.enableCors({
     origin: true,
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key'],
   });
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',

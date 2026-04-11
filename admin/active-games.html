@@ -48,10 +48,11 @@
         </table>
     </div>
 
+    <script src="admin-auth.js"></script>
     <script>
         async function loadGames() {
             try {
-                const res = await fetch('http://localhost:3005/admin/live-games');
+                const res = await fetchAdmin('games/active');
                 const games = await res.json();
                 const tbody = document.getElementById('games-body');
                 tbody.innerHTML = '';
