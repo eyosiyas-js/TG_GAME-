@@ -27,6 +27,7 @@ export class AuthService {
         data: {
           phoneNumber: dto.phoneNumber,
           passwordHash,
+          telegramId: dto.telegramId || null,
         },
       });
 
@@ -44,10 +45,38 @@ export class AuthService {
     return this.signToken(user.id, user.username, user.phoneNumber);
   }
 
-  async login(dto: LoginDto) {
+  async telegramLogin(dto: { telegramId: string }) {
     const user = await this.prisma.user.findUnique({
+      where: { telegramId: dto.telegramId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Telegram account not registered');
+    }
+
+    if (user.isBanned) {
+      throw new UnauthorizedException('Your account has been banned');
+    }
+
+    return this.signToken(user.id, user.username, user.phoneNumber);
+  }
+
+  async login(dto: LoginDto) {
+    let user = await this.prisma.user.findUnique({
       where: { phoneNumber: dto.phoneNumber },
     });
+
+    if (!user && dto.phoneNumber.startsWith('09')) {
+      user = await this.prisma.user.findUnique({
+        where: { phoneNumber: '+251' + dto.phoneNumber.substring(1) },
+      });
+    }
+
+    if (!user && dto.phoneNumber.startsWith('+2519')) {
+      user = await this.prisma.user.findUnique({
+        where: { phoneNumber: '0' + dto.phoneNumber.substring(4) },
+      });
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');

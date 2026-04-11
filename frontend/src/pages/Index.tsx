@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench, Star } from "lucide-react";
+import { Trophy, Zap, Users, ChevronRight, Bell, Loader2, AlertTriangle, Wrench, Star, Coins } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import GameCard from "@/components/GameCard";
 import { staggerContainer, staggerItem } from "@/components/game/AnimationEffects";
@@ -176,7 +176,9 @@ const Index = () => {
                 </motion.h1>
               </div>
             </div>
-            <Link to="/notifications" className="relative group">
+            <div className="flex items-center gap-2">
+
+              <Link to="/notifications" className="relative group ml-1">
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border border-border/50 group-hover:bg-muted/80">
                 <Bell className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
               </motion.div>
@@ -187,6 +189,7 @@ const Index = () => {
                 </>
               )}
             </Link>
+            </div>
           </motion.div>
 
       {/* Rejoin Active Match Banner */}

@@ -273,9 +273,11 @@ export class GameService {
     if (user && (user.botConfig as any)?.forceBotMatch) {
       const bots = await this.prisma.user.findMany({ where: { isBot: true, isBanned: false } });
       const targetType = (user.botConfig as any)?.targetBotType || 'NORMAL';
-      const eligibleBot = bots.find(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === gameType) || bots.find(b => b.isBot);
+      let eligibleBots = bots.filter(b => (b.botConfig as any)?.enabled !== false && (b.botConfig as any)?.botType === targetType && (b.botConfig as any)?.gameType === gameType);
+      if (eligibleBots.length === 0) eligibleBots = bots.filter(b => b.isBot);
       
-      if (eligibleBot) {
+      if (eligibleBots.length > 0) {
+        const eligibleBot = eligibleBots[Math.floor(Math.random() * eligibleBots.length)];
         return this.createMatch(userId, eligibleBot.id, gameType, stake);
       }
     }
@@ -328,8 +330,13 @@ export class GameService {
       if (eligibleBots.length < requiredPlayers - 1) {
         eligibleBots = bots.filter(b => b.isBot);
       }
-      if (eligibleBots.length >= requiredPlayers - 1) {
-        const botIds = eligibleBots.slice(0, requiredPlayers - 1).map(b => b.id);
+      if (eligibleBots.length > 0) {
+        for (let i = eligibleBots.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [eligibleBots[i], eligibleBots[j]] = [eligibleBots[j], eligibleBots[i]];
+        }
+        // Force exactly 1 bot to prevent bot-flooding
+        const botIds = eligibleBots.slice(0, 1).map(b => b.id);
         return this.createBingoMatch([userId, ...botIds], stake, 'QUICK');
       }
     }
@@ -371,17 +378,24 @@ export class GameService {
     return this.queues.get(key) || [];
   }
 
-  async getWaitingQueues(gameType: GameType): Promise<{ gameType: GameType; stake: number; playerCount: number }[]> {
-    const results: { gameType: GameType; stake: number; playerCount: number }[] = [];
+  async getWaitingQueues(gameType: GameType): Promise<{ gameType: GameType; stake: number; playerCount: number; hasBot: boolean }[]> {
+    const results: { gameType: GameType; stake: number; playerCount: number; hasBot: boolean }[] = [];
     console.log(`[DEBUG_QUEUES] Scanning all queues. Total keys: ${this.queues.size}`);
+    
+    // Check if players include any bots securely
+    const botRecords = await this.prisma.user.findMany({ where: { isBot: true }, select: { id: true } });
+    const botIds = new Set(botRecords.map(b => b.id));
+
     for (const [key, players] of this.queues.entries()) {
       console.log(`[DEBUG_QUEUES] Key: ${key}, Players: ${players.length}`);
       if (key.startsWith(gameType) && players.length > 0) {
         const parts = key.split('_');
+        const hasBot = players.some(playerId => botIds.has(playerId));
         results.push({
           gameType,
           stake: parseFloat(parts[1]),
           playerCount: players.length,
+          hasBot,
         });
       }
     }
