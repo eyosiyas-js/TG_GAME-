@@ -18,27 +18,38 @@ export class TelemetryService {
       return;
     }
 
-    const reply_markup = buttons ? {
-      inline_keyboard: [buttons]
+    const reply_markup = buttons && buttons.length > 0 ? {
+      inline_keyboard: [
+        buttons.map(b => ({
+          text: b.text,
+          callback_data: b.callback_data
+        }))
+      ]
     } : undefined;
+
+    console.log(`[Telemetry] Sending notification to ${this.adminIds.length} admins. Buttons: ${!!buttons}`);
 
     // Notify all admins in the list
     for (const adminId of this.adminIds) {
       try {
-        const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const payload = {
             chat_id: adminId,
             text: text,
             parse_mode: 'HTML',
             reply_markup,
-          }),
+        };
+
+        const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
           const error = await response.json();
-          console.error(`[Telemetry] Telegram API error for admin ${adminId}:`, error);
+          console.error(`[Telemetry] Telegram API error for admin ${adminId}:`, JSON.stringify(error));
+        } else {
+          console.log(`[Telemetry] Notification sent successfully to ${adminId}`);
         }
       } catch (error) {
         console.error(`[Telemetry] Failed for admin ${adminId}:`, error);
