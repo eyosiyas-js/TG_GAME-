@@ -12,11 +12,15 @@ export class TelemetryService {
     this.adminIds = adminIdString.split(',').map(id => id.trim()).filter(id => id.length > 0);
   }
 
-  async sendAdminMessage(text: string) {
+  async sendAdminMessage(text: string, buttons?: { text: string; callback_data: string }[]) {
     if (!this.botToken || this.adminIds.length === 0) {
       console.warn('[Telemetry] Missing BOT_TOKEN or ADMIN_TELEGRAM_ID. Notification skipped.');
       return;
     }
+
+    const reply_markup = buttons ? {
+      inline_keyboard: [buttons]
+    } : undefined;
 
     // Notify all admins in the list
     for (const adminId of this.adminIds) {
@@ -28,6 +32,7 @@ export class TelemetryService {
             chat_id: adminId,
             text: text,
             parse_mode: 'HTML',
+            reply_markup,
           }),
         });
 
@@ -49,21 +54,29 @@ export class TelemetryService {
     return this.sendAdminMessage(text);
   }
 
-  async notifyDeposit(username: string, amount: number, method: string) {
+  async notifyDeposit(username: string, amount: number, method: string, id: string) {
     const text = `💰 <b>Deposit Request!</b>\n\n` +
                  `👤 User: <b>${username}</b>\n` +
                  `💵 Amount: <b>${amount} ETB</b>\n` +
                  `🏧 Method: <b>${method}</b>\n` +
                  `⏰ Time: ${new Date().toLocaleString()}`;
-    return this.sendAdminMessage(text);
+    
+    return this.sendAdminMessage(text, [
+      { text: '✅ Approve', callback_data: `approve_dep:${id}` },
+      { text: '❌ Reject', callback_data: `reject_dep:${id}` }
+    ]);
   }
 
-  async notifyWithdrawal(username: string, amount: number, method: string) {
+  async notifyWithdrawal(username: string, amount: number, method: string, id: string) {
     const text = `💸 <b>Withdrawal Request!</b>\n\n` +
                  `👤 User: <b>${username}</b>\n` +
                  `💵 Amount: <b>${amount} ETB</b>\n` +
                  `🏧 Method: <b>${method}</b>\n` +
                  `⏰ Time: ${new Date().toLocaleString()}`;
-    return this.sendAdminMessage(text);
+    
+    return this.sendAdminMessage(text, [
+      { text: '✅ Approve', callback_data: `approve_wd:${id}` },
+      { text: '❌ Reject', callback_data: `reject_wd:${id}` }
+    ]);
   }
 }

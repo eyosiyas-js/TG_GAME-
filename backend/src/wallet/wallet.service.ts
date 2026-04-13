@@ -69,7 +69,7 @@ export class WalletService {
 
     // Notify admin about new deposit request
     this.prisma.user.findUnique({ where: { id: userId }, select: { username: true } }).then(user => {
-        this.telemetry.notifyDeposit(user?.username || 'Unknown', amount, method).catch(err => {
+        this.telemetry.notifyDeposit(user?.username || 'Unknown', amount, method, deposit.id).catch(err => {
             console.error('[WalletService] Failed to send deposit notification:', err);
         });
     });
@@ -124,7 +124,7 @@ export class WalletService {
       });
 
       // Notify admin about new withdrawal request
-      this.telemetry.notifyWithdrawal(user.username || 'Unknown', amount, method).catch(err => {
+      this.telemetry.notifyWithdrawal(user.username || 'Unknown', amount, method, withdrawal.id).catch(err => {
           console.error('[WalletService] Failed to send withdrawal notification:', err);
       });
 
