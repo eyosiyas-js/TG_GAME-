@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class TelemetryService {
-  private readonly botToken: string;
-  private readonly adminId: string;
+  private readonly botToken: string | undefined;
+  private readonly adminId: string | undefined;
 
   constructor(private config: ConfigService) {
     this.botToken = this.config.get<string>('BOT_TOKEN');
