@@ -219,11 +219,6 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
             <h1 className="text-lg font-display font-bold text-foreground">{roomData.name}</h1>
             <p className="text-xs text-primary font-display font-semibold">{roomData.stake} ETB stake</p>
           </div>
-          {/* Room code badge */}
-          <button onClick={handleCopyCode} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted border border-border text-xs font-display font-bold text-foreground">
-            {codeCopied ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-            {roomData.code}
-          </button>
           {/* Chat Button */}
           <motion.button whileTap={{ scale: 0.85 }} onClick={() => setChatOpen(true)} className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center relative">
             <MessageCircle className="w-4.5 h-4.5 text-muted-foreground" />
@@ -231,8 +226,27 @@ const MatchLobby = ({ gameName, emoji, players, onStart, stake, onStakeChange, g
           </motion.button>
         </div>
 
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-4xl text-center mb-6">
-          {emoji}
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center mb-6">
+          <span className="text-5xl mb-4">{emoji}</span>
+          
+          <div className="w-full card-game rounded-2xl p-4 flex flex-col items-center gap-2 border-primary/20 bg-primary/5 shadow-inner">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Room Invite Code</p>
+            <div className="flex items-center gap-4">
+               <span className="text-3xl font-display font-black tracking-[0.2em] text-foreground">{roomData.code}</span>
+               <motion.button 
+                 whileTap={{ scale: 0.9 }}
+                 onClick={handleCopyCode} 
+                 className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/20"
+               >
+                 {codeCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+               </motion.button>
+            </div>
+            {codeCopied && (
+              <motion.p initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-primary font-bold">
+                Copied to clipboard!
+              </motion.p>
+            )}
+          </div>
         </motion.div>
 
         {/* Error toast */}

@@ -475,9 +475,34 @@ export class AdminService {
       where: { id },
       include: {
         participants: { include: { user: { select: { username: true } } } },
-        moves: true,
+        moves: { include: { user: { select: { username: true } } } },
       },
     });
+  }
+
+  async getGameMoves(page: number, limit: number, gameType?: string) {
+    const { skip, take } = this.paginate(page, limit);
+    const where: any = {};
+    if (gameType) {
+      where.match = { gameType };
+    }
+
+    const total = await (this.prisma as any).matchMove.count({ where });
+    const data = await (this.prisma as any).matchMove.findMany({
+      where,
+      skip,
+      take,
+      include: {
+        user: { select: { username: true } },
+        match: { select: { gameType: true, createdAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   // ===================== ACTIVE GAMES =====================

@@ -26,6 +26,7 @@ function getRandomEthiopianName() {
 export class BotPoolManager implements OnModuleInit {
   private readonly logger = new Logger(BotPoolManager.name);
   private activeBots: Map<string, number> = new Map(); // userId -> activeGameCount
+  private userLastBot: Map<string, string> = new Map(); // humanUserId -> lastBotUserId
   private isActive: boolean = true;
 
   constructor(
@@ -59,6 +60,17 @@ export class BotPoolManager implements OnModuleInit {
         }
       }
     }
+
+    // Match end listener to free bots
+    this.gameService.onMatchFinish(async (matchId, playerIds, gameType) => {
+      this.logger.log(`Match ${matchId} finished. Freeing any bots involved.`);
+      for (const userId of playerIds) {
+        const current = this.activeBots.get(userId) || 0;
+        if (current > 0) {
+          this.activeBots.set(userId, current - 1);
+        }
+      }
+    });
 
     // Automated Bot Provisioning
     const gameTypes = ['BINGO', 'RPS', 'DICE'];
@@ -184,44 +196,58 @@ export class BotPoolManager implements OnModuleInit {
   }
 
   private async assignBotToQueue(gameType: GameType, stake: number) {
+    const queueKey = `${gameType}_${stake}`;
+    const playersInQueue = (this.gameService as any).queues.get(queueKey) || [];
+    const humanPlayers = await this.prisma.user.findMany({
+      where: { id: { in: playersInQueue }, isBot: false },
+    });
+
     let bots = await (this.prisma as any).user.findMany({
       where: { isBot: true, isBanned: false },
     });
 
-    // Prioritize CHEATER bots so if they exist, they get matched immediately.
-    let activeBots = bots.filter((b: any) => 
+    // Strategy 1: Find bots already assigned to this specific game type
+    let idealBots = bots.filter((b: any) => 
       (b.botConfig as any)?.enabled !== false &&
       (b.botConfig as any)?.gameType === gameType
     );
+
+    // Strategy 2: Fallback to any enabled generic bots if no ideal ones found
+    if (idealBots.length === 0) {
+      idealBots = bots.filter((b: any) => (b.botConfig as any)?.enabled !== false);
+    }
     
     // Shuffle the bots to prevent the same bot being picked repeatedly
-    for (let i = activeBots.length - 1; i > 0; i--) {
+    for (let i = idealBots.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [activeBots[i], activeBots[j]] = [activeBots[j], activeBots[i]];
+      [idealBots[i], idealBots[j]] = [idealBots[j], idealBots[i]];
     }
 
-    activeBots.sort((a: any, b: any) => {
-      const aType = a.botConfig?.botType;
-      const bType = b.botConfig?.botType;
-      if (aType === 'CHEATER' && bType !== 'CHEATER') return -1;
-      if (bType === 'CHEATER' && aType !== 'CHEATER') return 1;
-      return 0; // retains shuffled order for non-cheaters safely due to stable sort
-    });
-
-    for (const bot of activeBots) {
+    // Secondary Filter: Avoid picking a bot that matched the human in their last session
+    // Only if there are enough bots in the pool to rotate
+    for (const bot of idealBots) {
       const activeCount = this.activeBots.get(bot.id) || 0;
       const config = (bot as any).botConfig;
-      if (activeCount < (config?.maxConcurrentGames || 1)) {
-        const balanceData = await this.walletService.getBalance(bot.id);
-        if (Number(balanceData.total) >= stake) {
-          this.logger.log(`Assigning bot ${bot.username} to ${gameType} queue with stake ${stake}`);
-          try {
-            await (this.gameGateway as any).joinQueueByBot(bot.id, gameType, stake);
-            this.activeBots.set(bot.id, activeCount + 1);
-            return;
-          } catch (e) {
-            this.logger.error(`Bot ${bot.username} failed to join queue: ${e.message}`);
-          }
+
+      // Skip if bot is at capacity
+      if (activeCount >= (config?.maxConcurrentGames || 1)) continue;
+
+      // Skip if this bot was the last opponent for any human in this specific queue (if pool permits)
+      const hasRecentConflict = humanPlayers.some(human => this.userLastBot.get(human.id) === bot.id);
+      if (idealBots.length > 2 && hasRecentConflict) continue; 
+
+      const balanceData = await this.walletService.getBalance(bot.id);
+      if (Number(balanceData.total) >= stake) {
+        this.logger.log(`Assigning bot ${bot.username} to ${gameType} queue with stake ${stake}`);
+        try {
+          await (this.gameGateway as any).joinQueueByBot(bot.id, gameType, stake);
+          this.activeBots.set(bot.id, activeCount + 1);
+          
+          // Store rotation history for all humans who will be matched with this bot
+          humanPlayers.forEach(h => this.userLastBot.set(h.id, bot.id));
+          return;
+        } catch (e) {
+          this.logger.error(`Bot ${bot.username} failed to join queue: ${e.message}`);
         }
       }
     }

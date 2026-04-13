@@ -138,6 +138,15 @@ export class AdminController {
     return this.adminService.getMatchDetails(id);
   }
 
+  @Get('game-moves')
+  getGameMoves(
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
+    @Query('gameType') gameType?: string,
+  ) {
+    return this.adminService.getGameMoves(Number(page), Number(limit), gameType);
+  }
+
   // ===================== ACTIVE GAMES =====================
   @Get('games/active')
   getLiveGames() {

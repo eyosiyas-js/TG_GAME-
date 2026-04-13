@@ -37,6 +37,7 @@ export class GameService {
 
   private onBingoGameStartListeners: ((matchId: string, playerIds: string[]) => void)[] = [];
   private onMatchStartListeners: ((matchId: string, playerIds: string[], gameType: string) => void)[] = [];
+  private onMatchFinishListeners: ((matchId: string, playerIds: string[], gameType: string) => void)[] = [];
 
   private diceGames: Map<string, DiceState> = new Map(); // matchId -> DiceState
 
@@ -477,6 +478,10 @@ export class GameService {
     this.onMatchStartListeners.push(callback);
   }
 
+  onMatchFinish(callback: (matchId: string, playerIds: string[], gameType: string) => void) {
+    this.onMatchFinishListeners.push(callback);
+  }
+
   onBingoGameStart(callback: (matchId: string, playerIds: string[]) => void) {
     this.onBingoGameStartListeners.push(callback);
   }
@@ -591,6 +596,7 @@ export class GameService {
               where: { id: matchId },
               data: { status: 'FINISHED', winnerId, endedAt: new Date() },
             });
+            this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
             const stake = Number(match.stake);
             const totalPot = stake * match.participants.length;
             const commissionRate = await this.getCommissionRate(match.gameType);
@@ -631,6 +637,7 @@ export class GameService {
         where: { id: matchId },
         data: { status: 'FINISHED', winnerId, endedAt: new Date() } as any,
       });
+      this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
 
       const stake = Number(match.stake);
       if (winnerId) {
@@ -905,6 +912,7 @@ export class GameService {
         where: { id: matchId },
         data: { status: 'FINISHED', winnerId, endedAt: new Date() } as any,
       });
+      this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
 
       await tx.wallet.update({
         where: { userId: winnerId },
@@ -1014,6 +1022,7 @@ export class GameService {
         where: { id: matchId },
         data: { status: 'FINISHED', winnerId, endedAt: new Date() } as any,
       });
+      this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
 
       const stake = Number(match.stake);
       if (winnerId) {
@@ -1196,6 +1205,7 @@ export class GameService {
         where: { id: matchId },
         data: { status: 'FINISHED', winnerId, endedAt: new Date() } as any,
       });
+      this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
 
       const stake = Number(match.stake);
       if (winnerId) {
@@ -1309,6 +1319,7 @@ export class GameService {
         where: { id: matchId },
         data: { status: 'FINISHED', winnerId, endedAt: new Date() } as any,
       });
+      this.onMatchFinishListeners.forEach(cb => cb(matchId, match.participants.map(p => p.userId), match.gameType));
 
       const stake = Number(match.stake);
       if (winnerId) {
