@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto, LoginDto, SetUsernameDto } from './dto/auth.dto';
+import { TelemetryService } from '../telemetry/telemetry.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private telemetry: TelemetryService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -40,6 +42,11 @@ export class AuthService {
       });
 
       return newUser;
+    });
+
+    // Notify admin about new registration
+    this.telemetry.notifyRegistration(dto.phoneNumber).catch(err => {
+        console.error('[AuthService] Failed to send registration notification:', err);
     });
 
     return this.signToken(user.id, user.username, user.phoneNumber);

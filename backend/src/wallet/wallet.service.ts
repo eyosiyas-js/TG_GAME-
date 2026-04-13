@@ -1,10 +1,14 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from 'decimal.js';
+import { TelemetryService } from '../telemetry/telemetry.service';
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private telemetry: TelemetryService,
+  ) {}
 
   async getBalance(userId: string) {
     const wallet = await this.prisma.wallet.findUnique({
@@ -51,7 +55,7 @@ export class WalletService {
       throw new BadRequestException('Method, sender name, and receipt are required');
     }
 
-    return (this.prisma as any).depositRequest.create({
+    const deposit = await (this.prisma as any).depositRequest.create({
       data: {
         userId,
         amount,
@@ -62,6 +66,15 @@ export class WalletService {
         status: 'PENDING',
       },
     });
+
+    // Notify admin about new deposit request
+    this.prisma.user.findUnique({ where: { id: userId }, select: { username: true } }).then(user => {
+        this.telemetry.notifyDeposit(user?.username || 'Unknown', amount, method).catch(err => {
+            console.error('[WalletService] Failed to send deposit notification:', err);
+        });
+    });
+
+    return deposit;
   }
 
   async getUserDeposits(userId: string) {
@@ -100,7 +113,7 @@ export class WalletService {
         data: { balance: { decrement: amount } },
       });
 
-      return tx.withdrawalRequest.create({
+      const withdrawal = await tx.withdrawalRequest.create({
         data: {
           userId,
           amount,
@@ -109,6 +122,13 @@ export class WalletService {
           status: 'PENDING',
         },
       });
+
+      // Notify admin about new withdrawal request
+      this.telemetry.notifyWithdrawal(user.username || 'Unknown', amount, method).catch(err => {
+          console.error('[WalletService] Failed to send withdrawal notification:', err);
+      });
+
+      return withdrawal;
     });
   }
 

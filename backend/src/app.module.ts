@@ -9,6 +9,7 @@ import { GameModule } from './game/game.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationModule } from './notification/notification.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { TelemetryModule } from './telemetry/telemetry.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     GameModule,
     AdminModule,
     NotificationModule,
+    TelemetryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
