@@ -25,12 +25,9 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     
     // Find invitor if referral code provided
-    let invitor = null;
-    if (dto.referredBy) {
-      invitor = await this.prisma.user.findUnique({
-        where: { username: dto.referredBy }
-      });
-    }
+    const invitor = dto.referredBy 
+      ? await this.prisma.user.findUnique({ where: { username: dto.referredBy } })
+      : null;
 
     const user = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
