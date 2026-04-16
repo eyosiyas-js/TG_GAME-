@@ -23,6 +23,14 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    
+    // Find invitor if referral code provided
+    let invitor = null;
+    if (dto.referredBy) {
+      invitor = await this.prisma.user.findUnique({
+        where: { username: dto.referredBy }
+      });
+    }
 
     const user = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -30,6 +38,7 @@ export class AuthService {
           phoneNumber: dto.phoneNumber,
           passwordHash,
           telegramId: dto.telegramId || null,
+          referredById: invitor?.id || null,
         },
       });
 
@@ -40,6 +49,31 @@ export class AuthService {
           bonusBalance: 20.00,
         },
       });
+
+      // Award referral bonus if applicable
+      if (invitor) {
+        const referralCount = await tx.user.count({
+          where: { referredById: invitor.id }
+        });
+
+        // Only pay for the first 5 referrals (or if invitor is an influencer)
+        if (referralCount <= 5 || invitor.isInfluencer) {
+          await tx.wallet.update({
+            where: { userId: invitor.id },
+            data: { balance: { increment: 10.00 } }
+          });
+
+          await tx.transaction.create({
+            data: {
+              userId: invitor.id,
+              amount: 10.00,
+              type: 'REFERRAL' as any,
+              status: 'APPROVED',
+              notes: `Referral bonus for ${dto.phoneNumber}`
+            } as any
+          });
+        }
+      }
 
       return newUser;
     });

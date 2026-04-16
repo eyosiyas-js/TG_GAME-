@@ -210,6 +210,41 @@ const Profile = () => {
         </div>
       </motion.div>
 
+      {/* Referral Link Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="mb-8"
+      >
+        <h3 className="text-sm font-display font-bold text-foreground mb-3">Invite Friends & Earn</h3>
+        <div className="card-game rounded-xl p-4 border border-primary/20 bg-primary/5">
+          <p className="text-xs text-muted-foreground mb-3">
+            Share your link and get 10 ETB for every friend who joins (up to 5 friends).
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-background/50 border border-border rounded-lg px-3 py-2 text-xs font-mono truncate overflow-hidden">
+              {`${window.location.origin}/auth?ref=${username}`}
+            </div>
+            <button
+              onClick={() => {
+                const link = `${window.location.origin}/auth?ref=${username}`;
+                navigator.clipboard.writeText(link);
+                toast.success("Link copied!");
+              }}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-bold"
+            >
+              Copy
+            </button>
+          </div>
+          {profileData?.isInfluencer && (
+            <div className="mt-3 flex items-center gap-2 text-[10px] text-accent font-bold uppercase tracking-widest">
+              <Star className="w-3 h-3" /> Influencer Account (Unlimited Bonuses)
+            </div>
+          )}
+        </div>
+      </motion.div>
+
       {/* Quick Links */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}

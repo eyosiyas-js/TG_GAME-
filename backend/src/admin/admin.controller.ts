@@ -73,6 +73,17 @@ export class AdminController {
     return this.adminService.getUserTransactions(id);
   }
 
+  // ===================== REFERRAL MANAGEMENT =====================
+  @Get('referrals/stats')
+  getReferralStats(@Query('page') page = 1, @Query('limit') limit = 50) {
+    return this.adminService.getReferralStats(Number(page), Number(limit));
+  }
+
+  @Put('users/:id/influencer')
+  toggleInfluencer(@Param('id') id: string, @Body('isInfluencer') isInfluencer: boolean, @Req() req: any, @Ip() ip: string) {
+    return this.adminService.toggleInfluencerStatus(id, isInfluencer, req.apiKey, ip);
+  }
+
   // ===================== DEPOSIT MANAGEMENT =====================
   @Get('deposits')
   getDeposits(@Query('page') page = 1, @Query('limit') limit = 50, @Query('status') status?: string) {

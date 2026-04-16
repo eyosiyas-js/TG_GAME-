@@ -12,6 +12,10 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   telegramId?: string;
+
+  @IsOptional()
+  @IsString()
+  referredBy?: string;
 }
 
 export class TelegramLoginDto {

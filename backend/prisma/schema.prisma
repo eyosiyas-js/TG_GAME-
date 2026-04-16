@@ -19,6 +19,13 @@ model User {
   bonusMatches  Int       @default(0)
   botConfig     Json?     // { minDelay, maxDelay, winRate, maxConcurrentGames, preferredStakes }
   isBanned      Boolean   @default(false)
+  isInfluencer  Boolean   @default(false)
+  
+  // Referral System
+  referredById  String?
+  referredBy    User?     @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals     User[]    @relation("UserReferrals")
+  
   wallet          Wallet?
   matches         MatchParticipant[]
   moves           MatchMove[]
@@ -120,6 +127,7 @@ enum TransactionType {
   WIN
   COMMISSION
   TRANSFER
+  REFERRAL
 }
 
 enum DepositStatus {

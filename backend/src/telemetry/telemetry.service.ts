@@ -1,12 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AdminGateway } from '../admin/admin.gateway';
 
 @Injectable()
 export class TelemetryService {
   private readonly botToken: string | undefined;
   private readonly adminIds: string[];
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    @Inject(forwardRef(() => AdminGateway))
+    private adminGateway: AdminGateway,
+  ) {
     this.botToken = this.config.get<string>('BOT_TOKEN');
     const adminIdString = this.config.get<string>('ADMIN_TELEGRAM_ID') || '';
     this.adminIds = adminIdString.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -62,6 +67,10 @@ export class TelemetryService {
                  `📱 Phone: <code>${phoneNumber}</code>\n` +
                  `👤 User: <b>${username || 'N/A'}</b>\n` +
                  `⏰ Time: ${new Date().toLocaleString()}`;
+    
+    // Broadcast to Admin Dashboard
+    this.adminGateway.broadcastRegistration({ phoneNumber, username, timestamp: new Date() });
+
     return this.sendAdminMessage(text);
   }
 
@@ -72,6 +81,9 @@ export class TelemetryService {
                  `🏧 Method: <b>${method}</b>\n` +
                  `⏰ Time: ${new Date().toLocaleString()}`;
     
+    // Broadcast to Admin Dashboard
+    this.adminGateway.broadcastDeposit({ username, amount, method, id, timestamp: new Date() });
+
     return this.sendAdminMessage(text, [
       { text: '✅ Approve', callback_data: `approve_dep:${id}` },
       { text: '❌ Reject', callback_data: `reject_dep:${id}` }
@@ -85,6 +97,9 @@ export class TelemetryService {
                  `🏧 Method: <b>${method}</b>\n` +
                  `⏰ Time: ${new Date().toLocaleString()}`;
     
+    // Broadcast to Admin Dashboard
+    this.adminGateway.broadcastWithdrawal({ username, amount, method, id, timestamp: new Date() });
+
     return this.sendAdminMessage(text, [
       { text: '✅ Approve', callback_data: `approve_wd:${id}` },
       { text: '❌ Reject', callback_data: `reject_wd:${id}` }

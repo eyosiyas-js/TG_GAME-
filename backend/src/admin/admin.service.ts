@@ -262,6 +262,58 @@ export class AdminService {
     });
   }
 
+  // ===================== REFERRAL MANAGEMENT =====================
+  async getReferralStats(page: number, limit: number) {
+    const { skip, take } = this.paginate(page, limit);
+    
+    const users = await (this.prisma as any).user.findMany({
+      where: { isBot: false },
+      select: {
+        id: true,
+        username: true,
+        phoneNumber: true,
+        isInfluencer: true,
+        _count: {
+          select: { referrals: true }
+        },
+        wallet: {
+          select: { balance: true }
+        }
+      },
+      orderBy: {
+        referrals: { _count: 'desc' }
+      },
+      skip,
+      take,
+    });
+
+    const total = await (this.prisma as any).user.count({ where: { isBot: false } });
+
+    const formattedData = users.map((u: any) => ({
+      id: u.id,
+      username: u.username,
+      phoneNumber: u.phoneNumber,
+      isInfluencer: u.isInfluencer,
+      referralCount: u._count.referrals,
+      totalEarnings: Number(u.wallet?.balance || 0),
+    }));
+
+    return {
+      data: formattedData,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
+    };
+  }
+
+  async toggleInfluencerStatus(userId: string, isInfluencer: boolean, apiKey: string, ip: string) {
+    const user = await (this.prisma as any).user.update({
+      where: { id: userId },
+      data: { isInfluencer },
+    });
+
+    await this.logAction(apiKey, isInfluencer ? 'SET_INFLUENCER' : 'REMOVE_INFLUENCER', userId, null, ip);
+    return user;
+  }
+
   // ===================== DEPOSIT MANAGEMENT =====================
   async getAllDeposits(page: number, limit: number, status?: string) {
     const { skip, take } = this.paginate(page, limit);

@@ -17,12 +17,19 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [referredBy, setReferredBy] = useState<string | null>(null);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const urlPhone = searchParams.get("phone");
     const urlPwd = searchParams.get("pwd");
     const tgId = searchParams.get("tgId");
+    const ref = searchParams.get("ref") || searchParams.get("start");
+
+    if (ref) {
+      setReferredBy(ref);
+      setMode("signup");
+    }
 
     const doLogin = (endpoint: string, payload: any) => {
       setLoading(true);
@@ -91,7 +98,11 @@ const Auth = () => {
           navigate("/choose-username");
         }
       } else if (mode === "signup") {
-        const response = await api.post("/auth/register", { phoneNumber, password });
+        const response = await api.post("/auth/register", { 
+          phoneNumber, 
+          password,
+          referredBy: referredBy || undefined 
+        });
         localStorage.setItem("token", response.access_token);
         localStorage.setItem("user", JSON.stringify(response.user));
         localStorage.setItem("userId", response.user.id);
@@ -272,7 +283,18 @@ const Auth = () => {
           </motion.button>
         </motion.form>
 
-        {/* Toggle mode removed because bot handles signup */}
+        {/* Toggle mode */}
+        <div className="mt-8 text-center pb-8">
+          <p className="text-sm text-muted-foreground">
+            {mode === "login" ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+            <button
+              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              className="text-primary font-display font-bold"
+            >
+              {mode === "login" ? t("auth.createNew") : t("auth.signInNow")}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
