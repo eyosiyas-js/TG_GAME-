@@ -62,6 +62,32 @@ export class TelemetryService {
     }
   }
 
+  async sendMessageToUser(chatId: string, text: string) {
+    if (!this.botToken) {
+      console.warn('[Telemetry] Missing BOT_TOKEN. Telegram message skipped.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text,
+          parse_mode: 'HTML',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error(`[Telemetry] Telegram API error for user ${chatId}:`, JSON.stringify(error));
+      }
+    } catch (error) {
+      console.error(`[Telemetry] Failed for user ${chatId}:`, error);
+    }
+  }
+
   async notifyRegistration(phoneNumber: string, username?: string) {
     const text = `👤 <b>New User Registered!</b>\n\n` +
                  `📱 Phone: <code>${phoneNumber}</code>\n` +

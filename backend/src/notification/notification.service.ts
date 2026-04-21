@@ -1,11 +1,13 @@
 import { Injectable, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationGateway } from './notification.gateway';
+import { TelemetryService } from '../telemetry/telemetry.service';
 
 @Injectable()
 export class NotificationService {
   constructor(
     private prisma: PrismaService,
+    private telemetryService: TelemetryService,
     @Inject(forwardRef(() => NotificationGateway)) private notificationGateway: NotificationGateway
   ) {}
 
@@ -54,7 +56,20 @@ export class NotificationService {
     const notification = await (this.prisma as any).notification.create({
       data: { userId, title, message, type },
     });
+    
     this.notificationGateway.sendNotificationToUser(userId, notification);
+
+    // Send to Telegram
+    const user = await (this.prisma as any).user.findUnique({
+      where: { id: userId },
+      select: { telegramId: true }
+    });
+
+    if (user?.telegramId) {
+      const tgMessage = `<b>${title}</b>\n\n${message}`;
+      await this.telemetryService.sendMessageToUser(user.telegramId, tgMessage);
+    }
+
     return notification;
   }
 
@@ -62,27 +77,54 @@ export class NotificationService {
   async sendToUsers(userIds: string[], title: string, message: string, type: string = 'system') {
     const data = userIds.map(userId => ({ userId, title, message, type }));
     await (this.prisma as any).notification.createMany({ data });
+    
     // Fetch them back to get IDs and send them
     const newNotifications = await (this.prisma as any).notification.findMany({
       where: { userId: { in: userIds }, title, message, type },
       orderBy: { createdAt: 'desc' },
       take: userIds.length,
     });
+    
     newNotifications.forEach(n => this.notificationGateway.sendNotificationToUser(n.userId, n));
+
+    // Send to Telegram for each user
+    const users = await (this.prisma as any).user.findMany({
+      where: { id: { in: userIds } },
+      select: { telegramId: true }
+    });
+
+    const tgMessage = `<b>${title}</b>\n\n${message}`;
+    for (const user of users) {
+      if (user.telegramId) {
+        await this.telemetryService.sendMessageToUser(user.telegramId, tgMessage);
+      }
+    }
+
     return { count: data.length };
   }
 
   // Admin: send notification to all users
   async sendToAll(title: string, message: string, type: string = 'system') {
-    const users = await (this.prisma as any).user.findMany({ select: { id: true } });
+    const users = await (this.prisma as any).user.findMany({ 
+      where: { isBot: false },
+      select: { id: true, telegramId: true } 
+    });
+    
     const data = users.map((u: any) => ({ userId: u.id, title, message, type }));
     await (this.prisma as any).notification.createMany({ data });
     
-    // Rather than mapping to individual users, we can just send a global broadcast
-    // This assumes the frontend can handle a global broadcast that might not have a specific 'id'
     this.notificationGateway.sendNotificationToAll({
         title, message, type, read: false, createdAt: new Date(), isGlobal: true
     });
+
+    // Broadcast to Telegram
+    const tgMessage = `<b>${title}</b>\n\n${message}`;
+    for (const user of users) {
+      if (user.telegramId) {
+        await this.telemetryService.sendMessageToUser(user.telegramId, tgMessage);
+      }
+    }
+
     return { count: data.length };
   }
 
