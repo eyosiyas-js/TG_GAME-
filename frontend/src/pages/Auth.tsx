@@ -18,6 +18,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [referredBy, setReferredBy] = useState<string | null>(null);
+  const [telegramId, setTelegramId] = useState<string | null>(null);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -58,6 +59,7 @@ const Auth = () => {
     };
 
     if (tgId) {
+      setTelegramId(tgId);
       doLogin("/auth/telegram-login", { telegramId: tgId });
     } else if (urlPhone && urlPwd) {
       setPhoneNumber(urlPhone);
@@ -101,6 +103,7 @@ const Auth = () => {
         const response = await api.post("/auth/register", { 
           phoneNumber, 
           password,
+          telegramId: telegramId || undefined,
           referredBy: referredBy || undefined 
         });
         localStorage.setItem("token", response.access_token);
