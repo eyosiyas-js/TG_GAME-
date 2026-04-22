@@ -56,8 +56,6 @@ export class NotificationService {
     const notification = await (this.prisma as any).notification.create({
       data: { userId, title, message, type },
     });
-    
-    this.notificationGateway.sendNotificationToUser(userId, notification);
 
     // Send to Telegram
     const user = await (this.prisma as any).user.findUnique({
@@ -87,8 +85,6 @@ export class NotificationService {
       orderBy: { createdAt: 'desc' },
       take: userIds.length,
     });
-    
-    newNotifications.forEach(n => this.notificationGateway.sendNotificationToUser(n.userId, n));
 
     // Send to Telegram for each user
     const users = await (this.prisma as any).user.findMany({
@@ -115,10 +111,6 @@ export class NotificationService {
     
     const data = users.map((u: any) => ({ userId: u.id, title, message, type }));
     await (this.prisma as any).notification.createMany({ data });
-    
-    this.notificationGateway.sendNotificationToAll({
-        title, message, type, read: false, createdAt: new Date(), isGlobal: true
-    });
 
     // Broadcast to Telegram
     const tgMessage = `<b>${title}</b>\n\n${message}`;

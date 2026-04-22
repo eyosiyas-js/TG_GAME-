@@ -64,10 +64,10 @@ export class AuthService {
             data: {
               userId: invitor.id,
               amount: 10.00,
-              type: 'REFERRAL' as any,
+              type: 'REFERRAL',
               status: 'APPROVED',
-              notes: `Referral bonus for ${dto.phoneNumber}`
-            } as any
+              referenceCode: `Invited: ${dto.phoneNumber}`
+            }
           });
         }
       }

@@ -224,11 +224,11 @@ const Profile = () => {
           </p>
           <div className="flex items-center gap-2">
             <div className="flex-1 bg-background/50 border border-border rounded-lg px-3 py-2 text-xs font-mono truncate overflow-hidden">
-              {`${window.location.origin}/auth?ref=${username}`}
+              {`https://t.me/habtbetbot?start=${username}`}
             </div>
             <button
               onClick={() => {
-                const link = `${window.location.origin}/auth?ref=${username}`;
+                const link = `https://t.me/habtbetbot?start=${username}`;
                 navigator.clipboard.writeText(link);
                 toast.success("Link copied!");
               }}
