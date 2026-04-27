@@ -38,9 +38,10 @@ export class BotPlayerClient {
 
   private async handleBotTurn(matchId: string, botUserId: string) {
     const user = await (this.prisma as any).user.findUnique({ where: { id: botUserId } });
-    const config = (user?.botConfig as any) || { minDelay: 1000, maxDelay: 3000 };
-    
-    let delay = Math.floor(Math.random() * (config.maxDelay - config.minDelay)) + config.minDelay;
+    const config = (user?.botConfig as any) || {};
+    const minDelay = Number(config.minDelay || 1000);
+    const maxDelay = Number(config.maxDelay || 3000);
+    let delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
 
     setTimeout(async () => {
       try {
@@ -70,9 +71,10 @@ export class BotPlayerClient {
 
   private async handleRpsTurn(matchId: string, botUserId: string) {
     const user = await (this.prisma as any).user.findUnique({ where: { id: botUserId } });
-    const config = (user?.botConfig as any) || { minDelay: 1000, maxDelay: 3000 };
-    
-    let delay = Math.floor(Math.random() * (config.maxDelay - config.minDelay)) + config.minDelay;
+    const config = (user?.botConfig as any) || {};
+    const minDelay = Number(config.minDelay || 1000);
+    const maxDelay = Number(config.maxDelay || 3000);
+    let delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
 
     setTimeout(async () => {
       try {
@@ -92,10 +94,12 @@ export class BotPlayerClient {
 
   private async handleDiceTurn(matchId: string, botUserId: string) {
     const user = await (this.prisma as any).user.findUnique({ where: { id: botUserId } });
-    const config = (user?.botConfig as any) || { minDelay: 1000, maxDelay: 3000 };
+    const config = (user?.botConfig as any) || {};
+    const minDelay = Number(config.minDelay || 1000);
+    const maxDelay = Number(config.maxDelay || 3000);
     
     // First roll
-    let delay1 = Math.floor(Math.random() * (config.maxDelay - config.minDelay)) + config.minDelay;
+    let delay1 = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
     
     setTimeout(async () => {
       try {
@@ -106,7 +110,7 @@ export class BotPlayerClient {
         );
 
         // Second roll or keep
-        let delay2 = Math.floor(Math.random() * (config.maxDelay - config.minDelay)) + config.minDelay;
+        let delay2 = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
         setTimeout(async () => {
            try {
               // Bot strategy: if score is high, it might keep, but let's keep it simple: roll twice for cheaters

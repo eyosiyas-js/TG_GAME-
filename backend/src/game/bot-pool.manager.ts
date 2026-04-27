@@ -104,6 +104,13 @@ export class BotPoolManager implements OnModuleInit {
     // Let's rely on the generic one.
   }
 
+  async handleBingoTurn(matchId: string, botUserId: string) {
+    const bot = await this.prisma.user.findUnique({ where: { id: botUserId } });
+    if (bot && bot.isBot) {
+      await this.botPlayerClient.checkTurn(matchId, botUserId);
+    }
+  }
+
   async ensureBotsExist(count: number = 5, botType: string = 'NORMAL', gameType: string = 'BINGO') {
     const bots = await this.prisma.user.findMany({ where: { isBot: true } });
     const existingCount = bots.filter((b: any) =>

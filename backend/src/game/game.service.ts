@@ -864,6 +864,9 @@ export class GameService {
     // If winner found, mark the state (gateway will finalize and clean up)
     if (winnerId) {
       state.winnerId = winnerId;
+    } else {
+      // Notify bot if it's their turn
+      this.botPoolManager.handleBingoTurn(matchId, nextTurnUserId).catch(e => console.error(e));
     }
 
     return {
