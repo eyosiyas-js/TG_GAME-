@@ -47,30 +47,8 @@ export class AuthService {
         },
       });
 
-      // Award referral bonus if applicable
-      if (invitor) {
-        const referralCount = await tx.user.count({
-          where: { referredById: invitor.id }
-        });
-
-        // Only pay for the first 5 referrals (or if invitor is an influencer)
-        if (referralCount <= 5 || invitor.isInfluencer) {
-          await tx.wallet.update({
-            where: { userId: invitor.id },
-            data: { balance: { increment: 10.00 } }
-          });
-
-          await tx.transaction.create({
-            data: {
-              userId: invitor.id,
-              amount: 10.00,
-              type: 'REFERRAL',
-              status: 'APPROVED',
-              referenceCode: `Invited: ${dto.phoneNumber}`
-            }
-          });
-        }
-      }
+      // Referral bonus is deferred — awarded after the referred user's first completed game
+      // (handled in GameService onMatchFinish listener)
 
       return newUser;
     });

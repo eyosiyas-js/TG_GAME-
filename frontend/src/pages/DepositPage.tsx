@@ -3,10 +3,18 @@ import { ArrowLeft, CreditCard, Smartphone, Building2, Upload, Copy, CheckCircle
 import { Link } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 
 const DepositPage = () => {
   const { t } = useTranslation();
+
+  const { data: platformStatus } = useQuery({
+    queryKey: ["platform-status"],
+    queryFn: () => api.get("/game/platform-status"),
+  });
+  const maintenanceMode = platformStatus?.maintenanceMode || false;
 
   const paymentMethods = [
     { id: "cbe", label: "CBE", icon: Building2, desc: "Commercial Bank of Ethiopia" },
@@ -82,6 +90,8 @@ const DepositPage = () => {
       </div>
     );
   }
+
+  if (maintenanceMode) return <MaintenanceOverlay />;
 
   return (
     <div className="px-4 pt-6 pb-24">

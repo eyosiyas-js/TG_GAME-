@@ -125,7 +125,7 @@ const Leaderboard = () => {
               </p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{player.wins} {t("leaderboard.matchesPlayed")}</p>
             </div>
-            <p className="text-sm font-display font-bold text-primary font-mono">${player.earnings.toLocaleString()}</p>
+            <p className="text-sm font-display font-bold text-primary font-mono">{player.earnings.toLocaleString()} ETB</p>
           </motion.div>
         ))}
       </div>

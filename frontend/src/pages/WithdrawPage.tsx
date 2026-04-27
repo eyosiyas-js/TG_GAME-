@@ -5,9 +5,16 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 
 const WithdrawPage = () => {
   const { t } = useTranslation();
+
+  const { data: platformStatus } = useQuery({
+    queryKey: ["platform-status"],
+    queryFn: () => api.get("/game/platform-status"),
+  });
+  const maintenanceMode = platformStatus?.maintenanceMode || false;
 
   const withdrawMethods = [
     // { id: "cbebirr", label: "CBE Birr", icon: Smartphone, desc: t("withdraw.withdrawViaCbeBirr") },
@@ -70,6 +77,8 @@ const WithdrawPage = () => {
       </div>
     );
   }
+
+  if (maintenanceMode) return <MaintenanceOverlay />;
 
   return (
     <div className="px-4 pt-6 pb-24">
