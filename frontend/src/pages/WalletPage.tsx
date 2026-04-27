@@ -4,12 +4,19 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownLeft, Clock, Plus, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { X, Loader2, Send, User, Zap } from "lucide-react";
+import { X, Loader2, Send, User, Zap, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 
 const WalletPage = () => {
   const { t } = useTranslation();
+
+  const { data: platformStatus } = useQuery({
+    queryKey: ["platform-status"],
+    queryFn: () => api.get("/game/platform-status"),
+  });
+  const maintenanceMode = platformStatus?.maintenanceMode || false;
 
   const { data: balance, isLoading, refetch: refetchBalance } = useQuery({
     queryKey: ["wallet-balance"],
@@ -178,6 +185,16 @@ const WalletPage = () => {
               </div>
             </div>
           )}
+          {maintenanceMode ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
+                <Wrench className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-xs text-amber-500 font-display font-semibold leading-snug">
+                {t("home.underMaintenance")} — {t("home.maintenanceDesc")}
+              </p>
+            </div>
+          ) : (
           <div className="flex gap-2">
             <Link to="/deposit" className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm">
@@ -198,6 +215,7 @@ const WalletPage = () => {
               </motion.div>
             </button>
           </div>
+          )}
         </div>
       </motion.div>
 

@@ -11,7 +11,8 @@
     "level": "Level",
     "vs": "vs",
     "you": "You",
-    "max": "Max"
+    "max": "Max",
+    "backToHome": "Back to Home"
   },
   "nav": {
     "home": "Home",

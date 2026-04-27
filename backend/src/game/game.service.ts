@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { GameType } from '@prisma/client';
@@ -19,7 +19,7 @@ export interface DiceState {
 }
 
 @Injectable()
-export class GameService {
+export class GameService implements OnModuleInit {
   private queues: Map<string, string[]> = new Map(); // gameType_stake -> [userIds]
   private bingoQueueTimers: Map<string, NodeJS.Timeout> = new Map(); // key -> fill timer
   private bingoQueueCallbacks: Map<string, (playerIds: string[]) => void> = new Map();
@@ -49,6 +49,80 @@ export class GameService {
     @Inject(forwardRef(() => GameGateway))
     private gameGateway: GameGateway,
   ) {}
+
+  async onModuleInit() {
+    // Register the deferred referral bonus listener
+    this.onMatchFinish(async (_matchId, playerIds, _gameType) => {
+      await this.processReferralBonuses(playerIds);
+    });
+  }
+
+  /**
+   * Deferred referral bonus: award the invitor 10.00 ETB when the
+   * referred user completes their FIRST game (any game type).
+   * Limited to 5 paid referrals per invitor (unlimited for influencers).
+   */
+  private async processReferralBonuses(playerIds: string[]) {
+    for (const userId of playerIds) {
+      try {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, referredById: true, referralBonusPaid: true, phoneNumber: true, isBot: true },
+        });
+
+        // Skip bots, users without a referrer, or already-paid bonuses
+        if (!user || user.isBot || !user.referredById || user.referralBonusPaid) continue;
+
+        const invitor = await this.prisma.user.findUnique({
+          where: { id: user.referredById },
+          select: { id: true, isInfluencer: true },
+        });
+        if (!invitor) continue;
+
+        // Count how many referral bonuses have already been paid for this invitor
+        const paidReferralCount = await this.prisma.user.count({
+          where: { referredById: invitor.id, referralBonusPaid: true },
+        });
+
+        // Only pay for the first 5 referrals (unlimited for influencers)
+        if (paidReferralCount >= 5 && !invitor.isInfluencer) {
+          // Mark as processed so we don't re-check every game
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { referralBonusPaid: true },
+          });
+          continue;
+        }
+
+        // Award the bonus inside a transaction
+        await this.prisma.$transaction(async (tx) => {
+          await tx.wallet.update({
+            where: { userId: invitor.id },
+            data: { bonusBalance: { increment: 10.00 } },
+          });
+
+          await tx.transaction.create({
+            data: {
+              userId: invitor.id,
+              amount: 10.00,
+              type: 'REFERRAL',
+              status: 'APPROVED',
+              referenceCode: `Invited: ${user.phoneNumber}`,
+            },
+          });
+
+          await tx.user.update({
+            where: { id: userId },
+            data: { referralBonusPaid: true },
+          });
+        });
+
+        console.log(`[REFERRAL] Awarded 10.00 ETB to invitor ${invitor.id} for referred user ${userId} completing first game`);
+      } catch (err) {
+        console.error(`[REFERRAL] Error processing referral bonus for user ${userId}:`, err);
+      }
+    }
+  }
 
   async getSetting(key: string, defaultValue: string) {
     const s = await (this.prisma as any).systemSetting.findUnique({ where: { key } });

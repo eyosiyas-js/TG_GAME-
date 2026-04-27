@@ -22,9 +22,10 @@ model User {
   isInfluencer  Boolean   @default(false)
   
   // Referral System
-  referredById  String?
-  referredBy    User?     @relation("UserReferrals", fields: [referredById], references: [id])
-  referrals     User[]    @relation("UserReferrals")
+  referredById       String?
+  referredBy         User?     @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals          User[]    @relation("UserReferrals")
+  referralBonusPaid  Boolean   @default(false)
   
   wallet          Wallet?
   matches         MatchParticipant[]

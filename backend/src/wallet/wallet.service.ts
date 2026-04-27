@@ -10,6 +10,11 @@ export class WalletService {
     private telemetry: TelemetryService,
   ) {}
 
+  private async isMaintenanceMode(): Promise<boolean> {
+    const setting = await (this.prisma as any).systemSetting.findUnique({ where: { key: 'MAINTENANCE_MODE' } });
+    return setting?.value === 'true';
+  }
+
   async getBalance(userId: string) {
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
@@ -51,6 +56,10 @@ export class WalletService {
       throw new BadRequestException('Amount must be positive');
     }
 
+    if (await this.isMaintenanceMode()) {
+      throw new BadRequestException('Platform is in maintenance mode. Deposits are temporarily disabled.');
+    }
+
     if (!method || !senderName || !receiptUrl) {
       throw new BadRequestException('Method, sender name, and receipt are required');
     }
@@ -87,6 +96,10 @@ export class WalletService {
   async createWithdrawalRequest(userId: string, amount: number, method: string) {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
+    }
+
+    if (await this.isMaintenanceMode()) {
+      throw new BadRequestException('Platform is in maintenance mode. Withdrawals are temporarily disabled.');
     }
 
     if (!method) {
@@ -163,6 +176,10 @@ export class WalletService {
   async transfer(senderId: string, targetUsername: string, amount: number) {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
+    }
+
+    if (await this.isMaintenanceMode()) {
+      throw new BadRequestException('Platform is in maintenance mode. Transfers are temporarily disabled.');
     }
 
     const receiver = await this.prisma.user.findUnique({ where: { username: targetUsername } });

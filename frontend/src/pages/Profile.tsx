@@ -220,7 +220,7 @@ const Profile = () => {
         <h3 className="text-sm font-display font-bold text-foreground mb-3">Invite Friends & Earn</h3>
         <div className="card-game rounded-xl p-4 border border-primary/20 bg-primary/5">
           <p className="text-xs text-muted-foreground mb-3">
-            Share your link and get 10 ETB for every friend who joins (up to 5 friends).
+            Share your link and get 10 ETB for every friend who joins and plays(up to 5 friends).
           </p>
           <div className="flex items-center gap-2">
             <div className="flex-1 bg-background/50 border border-border rounded-lg px-3 py-2 text-xs font-mono truncate overflow-hidden">
