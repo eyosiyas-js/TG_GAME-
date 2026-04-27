@@ -505,14 +505,43 @@ export class AdminService {
   }
 
   // ===================== MATCH HISTORY =====================
-  async getAllMatches(page: number, limit: number) {
+  async getAllMatches(page: number, limit: number, gameType?: string) {
     const { skip, take } = this.paginate(page, limit);
-    const total = await (this.prisma as any).match.count();
-    const data = await (this.prisma as any).match.findMany({
+    const where: any = {};
+    if (gameType) {
+      where.gameType = gameType.toUpperCase();
+    }
+    const total = await (this.prisma as any).match.count({ where });
+    const rawData = await (this.prisma as any).match.findMany({
+      where,
       skip, take,
       include: { participants: { include: { user: { select: { username: true } } } } },
       orderBy: { createdAt: 'desc' },
     });
+
+    const data = rawData.map((m: any) => {
+      let winnerName = null;
+      if (m.winnerId) {
+        const wp = m.participants.find((p: any) => p.userId === m.winnerId);
+        if (wp && wp.user) winnerName = wp.user.username;
+      }
+      
+      const betAmount = Number(m.stake || 0);
+      let winAmount = 0;
+      if (m.winnerId && m.participants) {
+         // rough calculation based on total stake minus some commission
+         const totalPot = betAmount * m.participants.length;
+         winAmount = totalPot * 0.9; // Assuming 10% commission
+      }
+
+      return {
+        ...m,
+        winnerName,
+        betAmount,
+        winAmount
+      };
+    });
+
     return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 

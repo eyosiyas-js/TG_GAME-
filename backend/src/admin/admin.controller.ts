@@ -135,8 +135,8 @@ export class AdminController {
 
   // ===================== MATCH HISTORY =====================
   @Get('matches')
-  getMatches(@Query('page') page = 1, @Query('limit') limit = 50) {
-    return this.adminService.getAllMatches(Number(page), Number(limit));
+  getMatches(@Query('page') page = 1, @Query('limit') limit = 50, @Query('gameType') gameType?: string) {
+    return this.adminService.getAllMatches(Number(page), Number(limit), gameType);
   }
 
   @Get('matches/stats')
