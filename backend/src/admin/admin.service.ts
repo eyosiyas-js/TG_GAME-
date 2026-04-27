@@ -248,7 +248,7 @@ export class AdminService {
   async getUserActivity(id: string) {
     return (this.prisma as any).matchParticipant.findMany({
       where: { userId: id },
-      include: { match: true },
+      include: { match: { include: { participants: { include: { user: { select: { username: true, isBot: true } } } } } } },
       orderBy: { match: { createdAt: 'desc' } },
       take: 50,
     });
@@ -498,7 +498,13 @@ export class AdminService {
         amount: Number(t.amount),
         type: t.type,
         status: t.status,
-        createdAt: t.createdAt
+        createdAt: t.createdAt,
+        method: t.method,
+        senderName: t.senderName,
+        transactionId: t.transactionId,
+        phoneNumber: t.phoneNumber,
+        withdrawTo: t.withdrawTo,
+        receiptUrl: t.receiptUrl
       })), 
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } 
     };
@@ -515,15 +521,19 @@ export class AdminService {
     const rawData = await (this.prisma as any).match.findMany({
       where,
       skip, take,
-      include: { participants: { include: { user: { select: { username: true } } } } },
+      include: { participants: { include: { user: { select: { username: true, isBot: true } } } } },
       orderBy: { createdAt: 'desc' },
     });
 
     const data = rawData.map((m: any) => {
       let winnerName = null;
+      let winnerIsBot = false;
       if (m.winnerId) {
         const wp = m.participants.find((p: any) => p.userId === m.winnerId);
-        if (wp && wp.user) winnerName = wp.user.username;
+        if (wp && wp.user) {
+          winnerName = wp.user.username;
+          winnerIsBot = wp.user.isBot || false;
+        }
       }
       
       const betAmount = Number(m.stake || 0);
@@ -537,6 +547,7 @@ export class AdminService {
       return {
         ...m,
         winnerName,
+        winnerIsBot,
         betAmount,
         winAmount
       };
