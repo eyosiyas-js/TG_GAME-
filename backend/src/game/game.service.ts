@@ -902,10 +902,22 @@ export class GameService implements OnModuleInit {
     const nonCheaters = state.players.filter((p: any) => !p.isBot || (p as any).botType !== 'CHEATER');
 
     if (cheatBot) {
+       const moveCount = state.calledNumbers.length;
        const humanWinAttempt = nonCheaters.some((h: any) => playerLines[h.userId] >= 5);
-       if (state.calledNumbers.length >= 19 || humanWinAttempt) {
-           playerLines[cheatBot.userId] = 5; 
-           winnerId = cheatBot.userId;       
+
+       // Gradual fake line progression so the cheater bot looks natural
+       if (humanWinAttempt || moveCount >= 19) {
+           // Force win on move 19 or if a human is about to win
+           playerLines[cheatBot.userId] = 5;
+           winnerId = cheatBot.userId;
+       } else if (moveCount >= 17) {
+           playerLines[cheatBot.userId] = Math.max(playerLines[cheatBot.userId], 4);
+       } else if (moveCount >= 13) {
+           playerLines[cheatBot.userId] = Math.max(playerLines[cheatBot.userId], 3);
+       } else if (moveCount >= 9) {
+           playerLines[cheatBot.userId] = Math.max(playerLines[cheatBot.userId], 2);
+       } else if (moveCount >= 5) {
+           playerLines[cheatBot.userId] = Math.max(playerLines[cheatBot.userId], 1);
        }
     }
 
