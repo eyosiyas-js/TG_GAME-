@@ -779,7 +779,16 @@ export class GameService implements OnModuleInit {
       return { userId, board, isBot: !!user?.isBot, botType };
     }));
 
-    const turnOrder = this.shuffleArray(playerIds);
+    // If a cheater bot is present, ensure it goes first so it always
+    // reaches the win milestone before any human can tie at 5 lines.
+    const cheaterPlayer = players.find(p => p.isBot && p.botType === 'CHEATER');
+    let turnOrder: string[];
+    if (cheaterPlayer) {
+      const others = this.shuffleArray(playerIds.filter(id => id !== cheaterPlayer.userId));
+      turnOrder = [cheaterPlayer.userId, ...others];
+    } else {
+      turnOrder = this.shuffleArray(playerIds);
+    }
     const state = {
       players,
       calledNumbers: [] as number[],
