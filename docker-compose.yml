@@ -1,28 +1,12 @@
 services:
-  db:
-    image: postgres:18-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-game}
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-game}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:changeme@db:5432/game}
+      # host.docker.internal allows the container to connect to the VPS host's local database
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:changeme@host.docker.internal:5432/game}
       JWT_SECRET: ${JWT_SECRET:-super-secret}
       PORT: 3005
       ADMIN_API_KEYS: ${ADMIN_API_KEYS:-admin-key-1}
@@ -30,9 +14,6 @@ services:
       - "3005:3005"
     volumes:
       - uploads:/app/uploads
-    depends_on:
-      db:
-        condition: service_healthy
 
   frontend:
     build:
@@ -45,5 +26,4 @@ services:
       - backend
 
 volumes:
-  pgdata:
   uploads:
