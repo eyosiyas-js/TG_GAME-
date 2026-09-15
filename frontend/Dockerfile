@@ -10,9 +10,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build with empty API base URL so requests go to same origin (nginx will proxy)
-ENV VITE_API_BASE_URL=""
-ENV VITE_SOCKET_URL=""
+# Build with /api so requests go to same origin (nginx will proxy)
+ENV VITE_API_BASE_URL="/api"
+ENV VITE_SOCKET_URL="/api"
 RUN npm run build
 
 # Stage 2: Serve with Nginx
