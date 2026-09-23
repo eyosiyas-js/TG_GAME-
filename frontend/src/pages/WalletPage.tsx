@@ -208,12 +208,14 @@ const WalletPage = () => {
                 {t("wallet.withdraw")}
               </motion.div>
             </Link>
+            {/*
             <button onClick={() => setShowTransfer(true)} className="flex-1">
               <motion.div whileTap={{ scale: 0.95 }} className="flex items-center justify-center gap-1 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-display font-bold text-sm border border-border">
                 <Send className="w-4 h-4" />
                 {t("wallet.transfer")}
               </motion.div>
             </button>
+            */}
           </div>
           )}
         </div>
