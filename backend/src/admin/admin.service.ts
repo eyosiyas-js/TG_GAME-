@@ -189,7 +189,7 @@ export class AdminService {
         data: {
           userId: newUser.id,
           balance: 0.00,
-          bonusBalance: 20.00,
+          bonusBalance: 0.00,
         },
       });
 
